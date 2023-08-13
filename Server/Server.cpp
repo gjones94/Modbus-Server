@@ -1,72 +1,26 @@
 #include "Server.h"
-#include <string.h>
-#include <stdlib.h>
-#include <ws2tcpip.h> // Include for inet_ntop
-#include <iostream>
-#include <vector>
 
 using namespace std;
 
 #define MAX_BUFFER_SIZE 1024
-#define MAX_CLIENTS 5
+#define MAX_CLIENTS 2
 
-int clientCount = 0;
-mutex clientCountLock;
-
-typedef unique_lock<mutex> MyLock;
-
-void HandleClient(SOCKET clientSocket)
-{
-    MyLock lock(clientCountLock);
-    clientCount++;
-    lock.unlock();
-
-	char buffer[1024];
-
-    while (true)
-    {
-        int bytesReceived = recv(clientSocket, buffer, sizeof(buffer), 0);
-
-        if (bytesReceived <= SOCKET_ERROR)
-        {
-            cout << "Unable to read data from client" << endl;
-        }
-        else
-        {
-            if (strcmp(buffer, exitCommand) == 0)
-            {
-                cout << "Client closed connection" << endl << endl;
-                closesocket(clientSocket);
-                break;
-            }
-
-            cout << "Message Received" << endl;
-            cout << "Length: " << strlen(buffer) << endl;
-            cout << "Message: " << buffer << endl;
-            cout << endl << endl;
-        }
-    }
-
-   /* lock.lock();
-    clientCount--;
-    lock.unlock();*/
-}
-
-Server::Server()
-{
-
-}
+//MUST be defined outside of any member functions since this is a static variable
+bool Server::Cancel = false;
 
 Server::Server(unsigned short port)
 {
     Port = port;
+    ClientCount = 0;
     ServerSocket = INVALID_SOCKET;
     Version = MAKEWORD(0, 0);
 };
 
-
 void Server::Start()
 {
+
+    signal(SIGINT, SignalClose);
+
     bool success = InitializeSocket();
 
     if (success)
@@ -134,8 +88,6 @@ bool Server::BindSocket()
 
 void Server::Listen()
 {
-    thread clientThreads[MAX_CLIENTS];
-
     int result = listen(ServerSocket, SOMAXCONN);
 
     if (result == SOCKET_ERROR)
@@ -143,16 +95,17 @@ void Server::Listen()
         cout << "Failed to enable listening on socket" << endl;
         closesocket(ServerSocket);
         WSACleanup();
+        return;
     }
 
-    while (true)
+	cout << "Listening for incoming connections on port " << Port << " ..." << endl;
+
+    while (Cancel == false)
     {
         sockaddr_in clientAddress;
         int szClientAddress = sizeof(clientAddress);
 
-        cout << "Listening for incoming connections on port " << Port << " ..." << endl;
         SOCKET clientSocket = accept(ServerSocket, (SOCKADDR*) &clientAddress, &szClientAddress);
-        printf("Client socket %p", &clientSocket);
 
         if (clientSocket == INVALID_SOCKET)
         {
@@ -162,33 +115,86 @@ void Server::Listen()
             WSACleanup();
             ExitProcess(EXIT_FAILURE);
         }
-        else
+	
+
+        int clientCount = ClientCount.load(); //obtain the current value of the thread-safe counter
+        if (clientCount < MAX_CLIENTS)
         {
+            /*
+				Start new client communication on separate thread
+                ---------------------------------------------------
+                Since this is a member function that we are spinning off in a 
+                thread, we have to use & and this in the thread call
+                otherwise, we could just do: thread(HandleClient, clientSocket)
+            */
+            ClientThreads.push_back(thread(&Server::HandleClient, this, clientSocket));
+            ClientCount.store(clientCount + 1);
+
+            //Update server console with connection info
             char clientIpAddress[MAX_IP_LENGTH];
             if (inet_ntop(AF_INET, &(clientAddress.sin_addr), clientIpAddress, MAX_IP_LENGTH) != nullptr)
             {
-                cout << "Connected to Client: " << clientIpAddress << endl;
+                cout << "Established Connection with IP Address: " << clientIpAddress << endl;
             }
-        }
-
-        //unique_lock<mutex> lock(clientCountLock);
-        if (clientCount < MAX_CLIENTS)
-        {
-            //lock.unlock();
-            clientThreads[clientCount] = thread(HandleClient, clientSocket);
+            cout << "Active Clients: " << ClientCount.load() << endl;
         }
         else 
         {
-            printf("Too many clients connected\n");
+            printf("Max Clients Exceeded. Closing last attempted connection...\n");
+            //TODO send response to client about this
             closesocket(clientSocket);
         }
     }
 
-    for (int i = 0; i < MAX_CLIENTS; i++)
+    cout << "CANCELLED" << endl;
+
+    //Cleanup
+    for (int i = 0; i < ClientThreads.size(); i++)
     {
-        clientThreads[i].join();
+        ClientThreads[i].join();
     }
    
     closesocket(ServerSocket);
     WSACleanup();
+}
+
+
+void Server::HandleClient(SOCKET clientSocket)
+{
+    //Increase the count of clients in use
+	char exitCommand[] = "exit";
+
+	char buffer[1024];
+	while (true)
+	{
+		int bytesReceived = recv(clientSocket, buffer, sizeof(buffer), 0);
+
+		if (bytesReceived <= SOCKET_ERROR)
+		{
+			cout << "Unable to read data from client" << endl;
+		}
+		else
+		{
+			if (strcmp(buffer, exitCommand) == 0)
+			{
+				cout << "Client closed connection" << endl << endl;
+				closesocket(clientSocket);
+				break;
+			}
+
+			cout << "Message Received" << endl;
+			cout << "Length: " << strlen(buffer) << endl;
+			cout << "Message: " << buffer << endl;
+			cout << endl << endl;
+		}
+	}
+
+    int currentCount = ClientCount.load();
+    ClientCount.store(currentCount - 1);
+}
+
+void Server::SignalClose(int signum)
+{
+    cout << "CTRL-C" << endl;
+    Cancel = true;
 }
