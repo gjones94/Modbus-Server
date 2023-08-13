@@ -18,7 +18,7 @@ using namespace std;
 /* ======CONFIGURABLE======*/
 #define PORT 502
 #define SOCKET_TIMEOUT 60
-#define MAX_CLIENTS 3
+#define MAX_CLIENTS 30
 #define MAX_BUFFER_SIZE 1024
 /* ====END CONFIGURABLE====*/
 

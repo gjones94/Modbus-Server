@@ -79,6 +79,7 @@ bool Server::BindSocket()
 void Server::Listen()
 {
     int result = listen(ServerSocket, SOMAXCONN);
+    char sendBuffer[1024];
 
     if (result == SOCKET_ERROR)
     {
@@ -124,7 +125,8 @@ void Server::Listen()
         else 
         {
             cout << "\nMax Clients Exceeded. Closing last attempted connection...\n";
-            //TODO send response to client about this
+            strcpy_s(sendBuffer, "No connections currently available\n");
+            send(clientSocket, sendBuffer, sizeof(sendBuffer), 0);
             closesocket(clientSocket);
         }
     }
@@ -132,7 +134,6 @@ void Server::Listen()
     closesocket(ServerSocket);
     WSACleanup();
 }
-
 
 void Server::HandleClient(ClientConnectionData data)
 {
