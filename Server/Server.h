@@ -16,15 +16,24 @@
 using namespace std;
 
 #define MAX_IP_LENGTH 16
+#define SOCKET_WAIT 1
+#define RESULT_TIMEOUT 0
 
 typedef unique_lock<mutex> Lock;
+
+typedef struct ClientConnectionData
+{
+	int threadId;
+	SOCKET clientSocket;
+	bool cancelToken;
+
+} ClientConnectionData;
 
 class Server
 {
 	public:
 		Server(unsigned short port);
 	 	void Start();
-		static void SignalClose(int);
 
 	private:
 		WSAData WSAData;
@@ -33,12 +42,12 @@ class Server
 		unsigned short Port;
 
 		vector<thread> ClientThreads;
+		ClientConnectionData ClientData;
 		atomic<int> ClientCount;
-		static bool Cancel;
 
 		bool InitializeSocket();
 		bool BindSocket();
 		void Listen();
-		void HandleClient(SOCKET);
+		void HandleClient(ClientConnectionData *data);
 };
 
