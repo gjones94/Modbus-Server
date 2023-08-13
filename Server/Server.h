@@ -15,24 +15,30 @@
 
 using namespace std;
 
+/* ======CONFIGURABLE======*/
+#define PORT 502
+#define SOCKET_TIMEOUT 60
+#define MAX_CLIENTS 3
+#define MAX_BUFFER_SIZE 1024
+/* ====END CONFIGURABLE====*/
+
 #define MAX_IP_LENGTH 16
-#define SOCKET_WAIT 1
 #define RESULT_TIMEOUT 0
 
-typedef unique_lock<mutex> Lock;
+const char CLIENT_DISCONNECT[] = "Exit";
 
 typedef struct ClientConnectionData
 {
 	int threadId;
 	SOCKET clientSocket;
-	bool cancelToken;
+	sockaddr_in clientAddress;
 
 } ClientConnectionData;
 
 class Server
 {
 	public:
-		Server(unsigned short port);
+		Server();
 	 	void Start();
 
 	private:
@@ -41,13 +47,36 @@ class Server
 		SOCKET ServerSocket;
 		unsigned short Port;
 
-		vector<thread> ClientThreads;
+		/// <summary>
+		/// ClientId, Socket, IP address
+		/// </summary>
 		ClientConnectionData ClientData;
+		/// <summary>
+		/// Keeps track of the number of active clients
+		/// </summary>
 		atomic<int> ClientCount;
 
+		/// <summary>
+		/// Initializes socket using WSAData
+		/// </summary>
+		/// <returns></returns>
 		bool InitializeSocket();
+
+		/// <summary>
+		/// Binds socket to host IP address
+		/// </summary>
+		/// <returns></returns>
 		bool BindSocket();
+
+		/// <summary>
+		/// Starts listening for client connections on continuous loop
+		/// </summary>
 		void Listen();
-		void HandleClient(ClientConnectionData *data);
+
+		/// <summary>
+		/// Client communication handler that runs on a separate thread
+		/// </summary>
+		/// <param name="data"></param>
+		void HandleClient(ClientConnectionData data);
 };
 

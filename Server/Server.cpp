@@ -2,12 +2,9 @@
 
 using namespace std;
 
-#define MAX_BUFFER_SIZE 1024
-#define MAX_CLIENTS 2
-
-Server::Server(unsigned short port)
+Server::Server()
 {
-    Port = port;
+    Port = PORT;
     ClientCount = 0;
     ServerSocket = INVALID_SOCKET;
     Version = MAKEWORD(0, 0);
@@ -31,7 +28,6 @@ void Server::Start()
 bool Server::InitializeSocket()
 {
     //Version of winsock we want to use (v2.2)
-
 	/*
 		MAKEWORD takes two bytes, and smashes them to create a 16 bit word
 		(In this case 0x0202)
@@ -109,9 +105,8 @@ void Server::Listen()
             WSACleanup();
             ExitProcess(EXIT_FAILURE);
         }
-	
 
-        int clientCount = ClientCount.load(); //obtain the current value of the thread-safe counter
+        int clientCount = ClientCount.load(); //obtain the current value of the thread-safe client counter
         if (clientCount < MAX_CLIENTS)
         {
             /*
@@ -121,102 +116,101 @@ void Server::Listen()
                 thread, we have to use & and this in the thread call
                 otherwise, we could just do: thread(HandleClient, clientSocket)
             */
+            ClientConnectionData data { clientCount + 1, clientSocket, clientAddress };
+            thread new_connection(&Server::HandleClient, this, data);
+            new_connection.detach(); //Detach so that the client data doesn't get invalidated on next loop
 
-            ClientConnectionData data { clientCount, clientSocket, false };
-            ClientThreads.push_back(thread(&Server::HandleClient, this, &data));
-            ClientCount.store(clientCount + 1);
-
-            printf("Server: Cancel address - %p\n", &(data.cancelToken));
-
-            //Update server console with connection info
-            char clientIpAddress[MAX_IP_LENGTH];
-            if (inet_ntop(AF_INET, &(clientAddress.sin_addr), clientIpAddress, MAX_IP_LENGTH) != nullptr)
-            {
-                cout << "Established Connection with IP Address: " << clientIpAddress << endl;
-            }
-            cout << "Active Clients: " << ClientCount.load() << endl;
-
-            this_thread::sleep_for(chrono::milliseconds(10000));
-            cout << "Server cancelling client thread..";
-            data.cancelToken = true;
-            break;
         }
         else 
         {
-            printf("Max Clients Exceeded. Closing last attempted connection...\n");
+            cout << "\nMax Clients Exceeded. Closing last attempted connection...\n";
             //TODO send response to client about this
             closesocket(clientSocket);
         }
     }
 
-    //Cleanup
-    cout << "Waiting for client threads to join" << endl;
-    for (int i = 0; i < ClientThreads.size(); i++) {
-        ClientThreads[i].join();
-    }
-   
-    cout << "Client thread joined" << endl;
     closesocket(ServerSocket);
     WSACleanup();
 }
 
 
-void Server::HandleClient(ClientConnectionData *data)
+void Server::HandleClient(ClientConnectionData data)
 {
-    //Increase the count of clients in use
-	char exitCommand[] = "exit";
-    int threadId = data->threadId;
-    SOCKET clientSocket = data->clientSocket;
     int monitorResult;
-	char buffer[1024];
+	char recvBuffer[1024];
+    char sendBuffer[1024];
+    char IPAddress[MAX_IP_LENGTH];
 
-    cout << "Client is running on thread: #" << threadId << endl;
+    //Increase the count of clients in use
+    int clientCount = ClientCount.load();
+    ClientCount.store(clientCount + 1);
 
-	while (data->cancelToken == false)
+    strcpy_s(sendBuffer, "CONNECTED");
+    send(data.clientSocket, sendBuffer, sizeof(sendBuffer), 0);
+
+    if (inet_ntop(AF_INET, &(data.clientAddress.sin_addr), IPAddress, MAX_IP_LENGTH) != nullptr)
+    {
+        cout << "\nCONNECTED: Client #" << ClientCount.load() << " - IP address: " << IPAddress << endl;
+    }
+
+	while (true)
 	{
         fd_set readset; //data structure that represents a set of socket descriptors (array of integers)
         FD_ZERO(&readset); //clear out the set of sockets
-        FD_SET(clientSocket, &readset); //add specific socket to to the set
+        FD_SET(data.clientSocket, &readset); //add specific socket to to the set
 
         timeval timeout;
-        timeout.tv_sec = 1; 
+        timeout.tv_sec = SOCKET_TIMEOUT; 
         timeout.tv_usec = 0;
-		//monitor socket for 1 second
         monitorResult = select(0, &readset, nullptr, nullptr, &timeout);
 
         if (monitorResult == SOCKET_ERROR)
         {
-            cout << "Error occured while waiting for socket select monitoring" << endl;
+            cout << "\nERROR: Error occured while waiting for socket select monitoring\n";
             return;
         }
-        else if (monitorResult != RESULT_TIMEOUT) //a non-timeout event hit the socket
+        else if (monitorResult == RESULT_TIMEOUT)
         {
-            if (FD_ISSET(clientSocket, &readset))
-            {
-                int bytesReceived = recv(clientSocket, buffer, sizeof(buffer), 0);
+            cout << "\nTIMEOUT: Client #" << data.threadId << "\n";
+            break;
+        }
 
-                if (bytesReceived <= SOCKET_ERROR)
+		if (FD_ISSET(data.clientSocket, &readset)) //socket is ready to read data
+		{
+			int bytesReceived = recv(data.clientSocket, recvBuffer, sizeof(recvBuffer), 0);
+
+			if (bytesReceived <= SOCKET_ERROR)
+			{
+				cout << "\nFAILED READ: client #" << data.threadId << endl;
+				break;
+			}
+			else
+			{
+                if (strcmp(CLIENT_DISCONNECT, recvBuffer) == 0)
                 {
-                    cout << "Unable to read data from client" << endl;
+                    char response[MAX_BUFFER_SIZE];
+                    sprintf_s(response, "DISCONNECT: Closing connection\n");
+                    send(data.clientSocket, response, sizeof(response), 0);
+                    break;
                 }
-                else
+                else 
                 {
-                    cout << "Message Received" << endl;
-                    cout << "Length: " << strlen(buffer) << endl;
-                    cout << "Message: " << buffer << endl;
-                    cout << endl << endl;
+					cout << "\nMESSAGE: Client #" << data.threadId << endl;
+					cout << "=========================================================\n";
+					cout << "Message: " << recvBuffer << "\n";
+					cout << "=========================================================\n";
+
+                    char response[MAX_BUFFER_SIZE];
+                    sprintf_s(response, "Message Received\n");
+                    send(data.clientSocket, response, sizeof(response), 0);
                 }
-            }
-        }
-        else {
-            if (data->cancelToken == true)
-            {
-                cout << "Client #" << threadId << " -> thread has been cancelled..." << endl;
-                this_thread::sleep_for(chrono::milliseconds(2000));
-            }
-        }
+			}
+		}
 	}
+	closesocket(data.clientSocket);
 
-    int currentCount = ClientCount.load();
-    ClientCount.store(currentCount - 1);
+    cout << "\nDISCONNECTED: Client #" << data.threadId << "\n";
+
+	int currentCount = ClientCount.load();
+	ClientCount.store(currentCount - 1);
 }
