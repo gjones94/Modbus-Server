@@ -3,28 +3,62 @@
 #include <stdlib.h>
 #include <ws2tcpip.h> // Include for inet_ntop
 #include <iostream>
+#include <vector>
 
 using namespace std;
 
+#define MAX_BUFFER_SIZE 1024
+#define MAX_CLIENTS 5
+
+int clientCount = 0;
+mutex clientCountLock;
+
+typedef unique_lock<mutex> MyLock;
+
+void HandleClient(SOCKET clientSocket)
+{
+    MyLock lock(clientCountLock);
+    clientCount++;
+    lock.unlock();
+
+	char buffer[1024];
+
+    while (true)
+    {
+        int bytesReceived = recv(clientSocket, buffer, sizeof(buffer), 0);
+
+        if (bytesReceived <= SOCKET_ERROR)
+        {
+            cout << "Unable to read data from client" << endl;
+        }
+        else
+        {
+            if (strcmp(buffer, exitCommand) == 0)
+            {
+                cout << "Client closed connection" << endl << endl;
+                closesocket(clientSocket);
+                break;
+            }
+
+            cout << "Message Received" << endl;
+            cout << "Length: " << strlen(buffer) << endl;
+            cout << "Message: " << buffer << endl;
+            cout << endl << endl;
+        }
+    }
+
+   /* lock.lock();
+    clientCount--;
+    lock.unlock();*/
+}
 
 Server::Server()
 {
 
 }
 
-Server::Server(const char *ipAddress, unsigned short port)
+Server::Server(unsigned short port)
 {
-    IpAddress = (char *) malloc(sizeof(char) * MAX_IP_LENGTH);
-
-    if (IpAddress != NULL)
-    {
-		strcpy_s(IpAddress, MAX_IP_LENGTH, ipAddress);
-    }
-    else 
-    {
-        cout << "Failed to Initialize Server " << endl;
-    }
-
     Port = port;
     ServerSocket = INVALID_SOCKET;
     Version = MAKEWORD(0, 0);
@@ -84,7 +118,8 @@ bool Server::BindSocket()
     serverIPAddress.sin_family = AF_INET;
     serverIPAddress.sin_addr.s_addr = INADDR_ANY; //Allows connection on EVERY network interface with IP address
     serverIPAddress.sin_port = htons(Port);
-    int result = bind(ServerSocket, (SOCKADDR*)& serverIPAddress, sizeof(serverIPAddress));
+
+    int result = bind(ServerSocket, (SOCKADDR*) &serverIPAddress, sizeof(serverIPAddress));
     if (result == SOCKET_ERROR)
     {
         cout << "Failed to bind socket to IP" << endl;
@@ -99,7 +134,8 @@ bool Server::BindSocket()
 
 void Server::Listen()
 {
-    char exitCommand[] = "Exit";
+    thread clientThreads[MAX_CLIENTS];
+
     int result = listen(ServerSocket, SOMAXCONN);
 
     if (result == SOCKET_ERROR)
@@ -116,6 +152,7 @@ void Server::Listen()
 
         cout << "Listening for incoming connections on port " << Port << " ..." << endl;
         SOCKET clientSocket = accept(ServerSocket, (SOCKADDR*) &clientAddress, &szClientAddress);
+        printf("Client socket %p", &clientSocket);
 
         if (clientSocket == INVALID_SOCKET)
         {
@@ -134,30 +171,22 @@ void Server::Listen()
             }
         }
 
-        cout << "Type \"Exit\" to end session" << endl;
-        while (true)
+        //unique_lock<mutex> lock(clientCountLock);
+        if (clientCount < MAX_CLIENTS)
         {
-            char buffer[1024];
-            int bytesReceived = recv(clientSocket, buffer, sizeof(buffer), 0);
-            if (bytesReceived <= SOCKET_ERROR)
-            {
-                cout << "Unable to read data from client" << endl;
-            }
-            else
-            {
-                if (strcmp(buffer, exitCommand) == 0)
-                {
-                    cout << "Client closed connection" << endl << endl;
-                    closesocket(clientSocket);
-                    break;
-                }
-
-                cout << "Message Received" << endl;
-                cout << "Length: " << strlen(buffer) << endl;
-                cout << "Message: " << buffer << endl;
-                cout << endl << endl;
-            }
+            //lock.unlock();
+            clientThreads[clientCount] = thread(HandleClient, clientSocket);
         }
+        else 
+        {
+            printf("Too many clients connected\n");
+            closesocket(clientSocket);
+        }
+    }
+
+    for (int i = 0; i < MAX_CLIENTS; i++)
+    {
+        clientThreads[i].join();
     }
    
     closesocket(ServerSocket);
