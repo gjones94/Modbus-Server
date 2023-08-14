@@ -1,7 +1,7 @@
-#include "Server.h"
+#include "BaseServer.h"
 
 int main() {
-    Server server;
+    BaseServer server;
     server.Start();
     return 1;
 }

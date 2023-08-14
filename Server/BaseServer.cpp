@@ -1,8 +1,8 @@
-#include "Server.h"
+#include "BaseServer.h"
 
 using namespace std;
 
-Server::Server()
+BaseServer::BaseServer()
 {
     Port = PORT;
     ClientCount = 0;
@@ -10,7 +10,7 @@ Server::Server()
     Version = MAKEWORD(0, 0);
 };
 
-void Server::Start()
+void BaseServer::Start()
 {
     bool success = InitializeSocket();
 
@@ -25,7 +25,7 @@ void Server::Start()
     }
 }
 
-bool Server::InitializeSocket()
+bool BaseServer::InitializeSocket()
 {
     //Version of winsock we want to use (v2.2)
 	/*
@@ -56,7 +56,7 @@ bool Server::InitializeSocket()
     return true;
 }
 
-bool Server::BindSocket()
+bool BaseServer::BindSocket()
 {
     sockaddr_in serverIPAddress;
     serverIPAddress.sin_family = AF_INET;
@@ -76,7 +76,7 @@ bool Server::BindSocket()
     return true;
 }
 
-void Server::Listen()
+void BaseServer::Listen()
 {
     int result = listen(ServerSocket, SOMAXCONN);
     char sendBuffer[1024];
@@ -118,7 +118,7 @@ void Server::Listen()
                 otherwise, we could just do: thread(HandleClient, clientSocket)
             */
             ClientConnectionData data { clientCount + 1, clientSocket, clientAddress };
-            thread new_connection(&Server::HandleClient, this, data);
+            thread new_connection(&BaseServer::HandleClient, this, data);
             new_connection.detach(); //Detach so that the client data doesn't get invalidated on next loop
 
         }
@@ -135,7 +135,7 @@ void Server::Listen()
     WSACleanup();
 }
 
-void Server::HandleClient(ClientConnectionData data)
+void BaseServer::HandleClient(ClientConnectionData data)
 {
     int monitorResult;
 	char recvBuffer[1024];

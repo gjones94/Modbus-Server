@@ -35,10 +35,10 @@ typedef struct ClientConnectionData
 
 } ClientConnectionData;
 
-class Server
+class BaseServer
 {
 	public:
-		Server();
+		BaseServer();
 	 	void Start();
 
 	private:
