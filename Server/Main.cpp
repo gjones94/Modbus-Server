@@ -1,7 +1,7 @@
 #include "BaseServer.h"
 
 int main() {
-    BaseServer server;
+    BaseServer<int> server;
     server.Start();
     return 1;
 }
