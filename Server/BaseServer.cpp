@@ -27,7 +27,6 @@ template <typename T> void BaseServer<T>::Start()
     }
 }
 
-
 template <typename T> bool BaseServer<T>::InitializeSocket()
 {
     //Version of winsock we want to use (v2.2)
@@ -141,8 +140,6 @@ template <typename T> void BaseServer<T>::Listen()
 template <typename T> void BaseServer<T>::HandleClient(ClientConnectionData connectionData)
 {
     bool success;
-    T recvData;
-
     //Increase the count of clients in use
     int clientCount = ClientCount.load();
     ClientCount.store(clientCount + 1);
@@ -150,6 +147,7 @@ template <typename T> void BaseServer<T>::HandleClient(ClientConnectionData conn
     int monitorResult;
 	while (true)
 	{
+		T recvData;
         fd_set readset; //data structure that represents a set of socket descriptors (array of integers)
         FD_ZERO(&readset); //clear out the set of sockets
         FD_SET(connectionData.clientSocket, &readset); //add specific socket to to the set
@@ -197,7 +195,8 @@ template <typename T> void BaseServer<T>::HandleClient(ClientConnectionData conn
 
 template <typename T> bool BaseServer<T>::Receive(SOCKET clientSocket, T* receiveData)
 {
-	int bytesReceived = recv(clientSocket, (char *) receiveData, sizeof(receiveData), 0);
+	int bytesReceived = recv(clientSocket, (char *) receiveData, MAX_DATA_SIZE_BYTES, 0);
+    char* data = (char*) receiveData;
 
 	if (bytesReceived <= SOCKET_ERROR)
 	{
@@ -215,7 +214,7 @@ template <typename T> T BaseServer<T>::GenerateResponse(T clientRequestData)
 
 template <typename T> bool BaseServer<T>::Send(SOCKET clientSocket, T sendData)
 {
-    int bytesSent = send(clientSocket, (char*) &sendData, sizeof(sendData), 0);
+    int bytesSent = send(clientSocket, (char*) &sendData, MAX_DATA_SIZE_BYTES, 0);
     if (bytesSent <= SOCKET_ERROR)
     {
         return false;
