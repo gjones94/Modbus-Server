@@ -11,7 +11,6 @@ template <typename T> BaseServer<T>::BaseServer()
     Version = MAKEWORD(0, 0);
 };
 
-
 template <typename T> void BaseServer<T>::Start()
 {
     bool success = InitializeSocket();
@@ -58,7 +57,6 @@ template <typename T> bool BaseServer<T>::InitializeSocket()
     return true;
 }
 
-
 template <typename T> bool BaseServer<T>::BindSocket()
 {
     sockaddr_in serverIPAddress;
@@ -78,7 +76,6 @@ template <typename T> bool BaseServer<T>::BindSocket()
 
     return true;
 }
-
 
 template <typename T> void BaseServer<T>::Listen()
 {
