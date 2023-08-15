@@ -35,6 +35,7 @@ typedef struct ClientConnectionData
 
 } ClientConnectionData;
 
+template <typename T>
 class BaseServer
 {
 	public:
@@ -78,5 +79,11 @@ class BaseServer
 		/// </summary>
 		/// <param name="data"></param>
 		void HandleClient(ClientConnectionData data);
+
+		bool Send(SOCKET clientSocket, T sendData);
+
+		bool Receive(SOCKET clientSocket, T *receiveData);
+
+		T GenerateResponse(T clientRequestData);
 };
 

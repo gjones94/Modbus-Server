@@ -2,7 +2,8 @@
 
 using namespace std;
 
-BaseServer::BaseServer()
+
+template <typename T> BaseServer<T>::BaseServer()
 {
     Port = PORT;
     ClientCount = 0;
@@ -10,7 +11,8 @@ BaseServer::BaseServer()
     Version = MAKEWORD(0, 0);
 };
 
-void BaseServer::Start()
+
+template <typename T> void BaseServer<T>::Start()
 {
     bool success = InitializeSocket();
 
@@ -25,7 +27,8 @@ void BaseServer::Start()
     }
 }
 
-bool BaseServer::InitializeSocket()
+
+template <typename T> bool BaseServer<T>::InitializeSocket()
 {
     //Version of winsock we want to use (v2.2)
 	/*
@@ -56,7 +59,8 @@ bool BaseServer::InitializeSocket()
     return true;
 }
 
-bool BaseServer::BindSocket()
+
+template <typename T> bool BaseServer<T>::BindSocket()
 {
     sockaddr_in serverIPAddress;
     serverIPAddress.sin_family = AF_INET;
@@ -76,10 +80,10 @@ bool BaseServer::BindSocket()
     return true;
 }
 
-void BaseServer::Listen()
+
+template <typename T> void BaseServer<T>::Listen()
 {
     int result = listen(ServerSocket, SOMAXCONN);
-    char sendBuffer[1024];
 
     if (result == SOCKET_ERROR)
     {
@@ -124,9 +128,7 @@ void BaseServer::Listen()
         }
         else 
         {
-            cout << "\nMax Clients Exceeded. Closing last attempted connection...\n";
-            strcpy_s(sendBuffer, "No connections currently available\n");
-            send(clientSocket, sendBuffer, sizeof(sendBuffer), 0);
+            cout << "\nCONNECTION ERROR: Max clients exceeded. Closing last attempted connection...\n";
             closesocket(clientSocket);
         }
     }
@@ -135,30 +137,22 @@ void BaseServer::Listen()
     WSACleanup();
 }
 
-void BaseServer::HandleClient(ClientConnectionData data)
+
+template <typename T> void BaseServer<T>::HandleClient(ClientConnectionData connectionData)
 {
-    int monitorResult;
-	char recvBuffer[1024];
-    char sendBuffer[1024];
-    char IPAddress[MAX_IP_LENGTH];
+    bool success;
+    T recvData;
 
     //Increase the count of clients in use
     int clientCount = ClientCount.load();
     ClientCount.store(clientCount + 1);
 
-    strcpy_s(sendBuffer, "CONNECTED");
-    send(data.clientSocket, sendBuffer, sizeof(sendBuffer), 0);
-
-    if (inet_ntop(AF_INET, &(data.clientAddress.sin_addr), IPAddress, MAX_IP_LENGTH) != nullptr)
-    {
-        cout << "\nCONNECTED: Client #" << ClientCount.load() << " - IP address: " << IPAddress << endl;
-    }
-
+    int monitorResult;
 	while (true)
 	{
         fd_set readset; //data structure that represents a set of socket descriptors (array of integers)
         FD_ZERO(&readset); //clear out the set of sockets
-        FD_SET(data.clientSocket, &readset); //add specific socket to to the set
+        FD_SET(connectionData.clientSocket, &readset); //add specific socket to to the set
 
         timeval timeout;
         timeout.tv_sec = SOCKET_TIMEOUT; 
@@ -172,46 +166,63 @@ void BaseServer::HandleClient(ClientConnectionData data)
         }
         else if (monitorResult == RESULT_TIMEOUT)
         {
-            cout << "\nTIMEOUT: Client #" << data.threadId << "\n";
+            cout << "\nTIMEOUT: Client #" << connectionData.threadId << "\n";
             break;
         }
 
-		if (FD_ISSET(data.clientSocket, &readset)) //socket is ready to read data
-		{
-			int bytesReceived = recv(data.clientSocket, recvBuffer, sizeof(recvBuffer), 0);
+        //socket is ready to read data
+        if (FD_ISSET(connectionData.clientSocket, &readset)) 
+        {
+            success = Receive(connectionData.clientSocket, &recvData);
 
-			if (bytesReceived <= SOCKET_ERROR)
-			{
-				cout << "\nFAILED READ: client #" << data.threadId << endl;
-				break;
-			}
-			else
-			{
-                if (strcmp(CLIENT_DISCONNECT, recvBuffer) == 0)
-                {
-                    char response[MAX_BUFFER_SIZE];
-                    sprintf_s(response, "DISCONNECT: Closing connection\n");
-                    send(data.clientSocket, response, sizeof(response), 0);
-                    break;
-                }
-                else 
-                {
-					cout << "\nMESSAGE: Client #" << data.threadId << endl;
-					cout << "=========================================================\n";
-					cout << "Message: " << recvBuffer << "\n";
-					cout << "=========================================================\n";
+            if (success == false)
+            {
+                break;
+            }
 
-                    char response[MAX_BUFFER_SIZE];
-                    sprintf_s(response, "Message Received\n");
-                    send(data.clientSocket, response, sizeof(response), 0);
-                }
-			}
+            //Send back what we received as the default response
+            T responseData = GenerateResponse(recvData);
+
+            success = Send(connectionData.clientSocket, responseData);
+		
 		}
 	}
-	closesocket(data.clientSocket);
+	closesocket(connectionData.clientSocket);
 
-    cout << "\nDISCONNECTED: Client #" << data.threadId << "\n";
+    cout << "\nDISCONNECTED: Client #" << connectionData.threadId << "\n";
 
 	int currentCount = ClientCount.load();
 	ClientCount.store(currentCount - 1);
 }
+
+template <typename T> bool BaseServer<T>::Receive(SOCKET clientSocket, T* receiveData)
+{
+	int bytesReceived = recv(clientSocket, (char *) receiveData, sizeof(receiveData), 0);
+
+	if (bytesReceived <= SOCKET_ERROR)
+	{
+        return false;
+	}
+
+    return true;
+}
+
+template <typename T> T BaseServer<T>::GenerateResponse(T clientRequestData)
+{
+    return clientRequestData;
+}
+
+
+template <typename T> bool BaseServer<T>::Send(SOCKET clientSocket, T sendData)
+{
+    int bytesSent = send(clientSocket, (char*) &sendData, sizeof(sendData), 0);
+    if (bytesSent <= SOCKET_ERROR)
+    {
+        return false;
+    }
+
+    return true;
+}
+
+//explicitly inform compiler of the instantiations that will be used 
+template class BaseServer<char*>;
