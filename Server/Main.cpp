@@ -1,7 +1,7 @@
-#include "BaseServer.h"
+#include "ModbusSlave.h"
 
 int main() {
-    BaseServer<char*> server;
-    server.Start();
+    ModbusSlave slave(502);
+    slave.Start();
     return 1;
 }

@@ -40,6 +40,7 @@ class BaseServer
 {
 	public:
 		BaseServer();
+		void SetPort(unsigned short port);
 	 	void Start();
 
 	private:

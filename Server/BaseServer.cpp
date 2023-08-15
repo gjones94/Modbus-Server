@@ -9,7 +9,12 @@ template <typename T> BaseServer<T>::BaseServer()
     ClientCount = 0;
     ServerSocket = INVALID_SOCKET;
     Version = MAKEWORD(0, 0);
-};
+}
+
+template <typename T> void BaseServer<T>::SetPort(unsigned short port)
+{
+    Port = port;
+}
 
 template <typename T> void BaseServer<T>::Start()
 {
