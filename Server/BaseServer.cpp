@@ -70,6 +70,7 @@ template <typename T> bool BaseServer<T>::BindSocket()
     serverIPAddress.sin_port = htons(Port);
 
     int result = bind(ServerSocket, (SOCKADDR*) &serverIPAddress, sizeof(serverIPAddress));
+
     if (result == SOCKET_ERROR)
     {
         cout << "Failed to bind socket to IP" << endl;
@@ -187,8 +188,8 @@ template <typename T> void BaseServer<T>::HandleClient(ClientConnectionData conn
 		
 		}
 	}
-	closesocket(connectionData.clientSocket);
 
+	closesocket(connectionData.clientSocket);
     cout << "\nDISCONNECTED: Client #" << connectionData.threadId << "\n";
 
 	int currentCount = ClientCount.load();
@@ -198,7 +199,6 @@ template <typename T> void BaseServer<T>::HandleClient(ClientConnectionData conn
 template <typename T> bool BaseServer<T>::Receive(SOCKET clientSocket, T* receiveData)
 {
 	int bytesReceived = recv(clientSocket, (char *) receiveData, MAX_DATA_SIZE_BYTES, 0);
-    char* data = (char*) receiveData;
 
 	if (bytesReceived <= SOCKET_ERROR)
 	{
@@ -217,6 +217,7 @@ template <typename T> T BaseServer<T>::GenerateResponse(T clientRequestData)
 template <typename T> bool BaseServer<T>::Send(SOCKET clientSocket, T sendData)
 {
     int bytesSent = send(clientSocket, (char*) &sendData, MAX_DATA_SIZE_BYTES, 0);
+
     if (bytesSent <= SOCKET_ERROR)
     {
         return false;
