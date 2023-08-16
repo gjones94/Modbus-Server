@@ -1,9 +1,12 @@
 #pragma once
 #include "BaseServer.h"
-class ModbusSlave : public BaseServer<char*>
+#include "ModbusADU.h"
+
+class ModbusSlave : public BaseServer<ModbusADU>
 {
 	public:
 		ModbusSlave(int port);
 		void Start();
+		ModbusADU GenerateResponse(ModbusADU data) override;
 };
 

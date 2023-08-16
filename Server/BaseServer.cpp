@@ -1,4 +1,5 @@
 #include "BaseServer.h"
+#include "ModbusADU.h"
 
 using namespace std;
 
@@ -139,13 +140,14 @@ template <typename T> void BaseServer<T>::Listen()
     WSACleanup();
 }
 
-
 template <typename T> void BaseServer<T>::HandleClient(ClientConnectionData connectionData)
 {
     bool success;
     //Increase the count of clients in use
     int clientCount = ClientCount.load();
     ClientCount.store(clientCount + 1);
+
+    cout << endl << "CONNECTED: Client #" << clientCount << endl;
 
     int monitorResult;
 	while (true)
@@ -200,6 +202,8 @@ template <typename T> bool BaseServer<T>::Receive(SOCKET clientSocket, T* receiv
 {
 	int bytesReceived = recv(clientSocket, (char *) receiveData, MAX_DATA_SIZE_BYTES, 0);
 
+    T* castedData = (T*) receiveData;
+
 	if (bytesReceived <= SOCKET_ERROR)
 	{
         return false;
@@ -227,4 +231,6 @@ template <typename T> bool BaseServer<T>::Send(SOCKET clientSocket, T sendData)
 }
 
 //explicitly inform compiler of the instantiations that will be used 
+
+template class BaseServer<ModbusADU>;
 template class BaseServer<char*>;

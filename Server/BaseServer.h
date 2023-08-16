@@ -2,6 +2,7 @@
 //Inform compiler to link the winsock2 library
 #pragma comment(lib, "ws2_32.lib") 
 
+
 #include <stdio.h>
 #include <WinSock2.h>
 #include <string.h>
@@ -85,6 +86,6 @@ class BaseServer
 
 		bool Receive(SOCKET clientSocket, T *receiveData);
 
-		T GenerateResponse(T clientRequestData);
+		virtual T GenerateResponse(T clientRequestData);
 };
 

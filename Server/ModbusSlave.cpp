@@ -10,5 +10,11 @@ void ModbusSlave::Start()
 	BaseServer::Start();
 }
 
+ModbusADU ModbusSlave::GenerateResponse(ModbusADU input)
+{
+	input.FixByteOrder();
+	input.Print();
+	return input;
+}
 
 
