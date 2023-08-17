@@ -15,6 +15,12 @@ class ModbusADU
 		ReadInputRegister = 0x04
 	};
 
+	enum CoilStatus : uint16_t
+	{
+		ON = 0xFF00,
+		OFF = 0x0000
+	};
+
 	public:
 		uint16_t TransactionId;
 		uint16_t ProtocolId;
