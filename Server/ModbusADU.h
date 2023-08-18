@@ -25,15 +25,26 @@ enum CoilStatus : uint16_t
 	OFF = 0x0000
 };
 
+typedef struct ResponseData
+{
+	uint8_t response_code;
+	uint8_t data_size;
+	uint8_t* data;
+} ResponseData;
+
 class ModbusADU
 {
 	public:
+		/* MBAP */
 		uint16_t TransactionId;
 		uint16_t ProtocolId;
 		uint16_t MessageLength;
 		uint8_t UnitId;
+
+		/* PDU */
 		uint8_t FunctionCode;
 		uint8_t Data[MAX_DATA_LENGTH];
+
 		void FixHeaderByteOrder();
 };
 

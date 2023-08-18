@@ -1,28 +1,31 @@
 #pragma once
 #include "BaseServer.h"
 #include "ModbusADU.h"
+#include <cmath>
 
 #define START_ADDRESS 1
 #define DATA_BLOCK_SIZE 4096
+#define BITS_PER_BYTE 8
+#define BYTES_PER_REG 2
+
+enum REQUEST : int
+{
+	ADDR_HI = 0,
+	ADDR_LO = 1,
+	NUM_REQ_HI = 2,
+	NUM_REQ_LO = 3
+};
+
+enum RegisterType : uint16_t
+{
+	COIL = 00001,
+	INPUT_STATUS = 10001,
+	INPUT_REGISTER = 30001,
+	HOLDING_REGISTER = 40001
+};
 
 class ModbusSlave : public BaseServer<ModbusADU>
 {
-	enum DataRead
-	{
-		ADDR_HI = 0,
-		ADDR_LO = 1,
-		NUM_REQUESTED_HI = 2,
-		NUM_REQUESTED_LO = 3
-	};
-
-	enum RegisterStartAddress : int
-	{
-		COIL = 00001,
-		INPUT_STATUS = 10001,
-		INPUT_REGISTER = 30001,
-		HOLDING_REGISTER = 40001
-	};
-
 	public:
 		ModbusSlave(int port);
 		void Start();
@@ -43,12 +46,12 @@ class ModbusSlave : public BaseServer<ModbusADU>
 
 		/* General Methods */
 		ModbusADU GenerateResponse(ModbusADU data) override;
-		ModbusADU ReadCoil(uint8_t *requestData);
+		uint8_t Read(uint16_t registerType, uint8_t *requestData);
 
 		/* Helpers */
 		string GetFunctionName(uint8_t functionCode);
-		ModbusADU GetResponsePacket(uint8_t functionCode, uint8_t* data);
 		uint16_t GetRawStartAddress(uint8_t *data);
+		uint16_t GetNumberRequested(uint8_t *data);
 		uint16_t GetModbusAddress(uint8_t functionCode, uint16_t rawAddress);
 
 		/* Diagnostics */
