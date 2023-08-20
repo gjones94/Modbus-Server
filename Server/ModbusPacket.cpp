@@ -1,6 +1,6 @@
-#include "ModbusADU.h"
+#include "ModbusPacket.h"
 
-void ModbusADU::FixHeaderByteOrder()
+void ModbusPacket::FixHeaderByteOrder()
 {
 	TransactionId = ntohs(TransactionId);
 	ProtocolId = ntohs(ProtocolId);

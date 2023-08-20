@@ -1,5 +1,5 @@
 #include "BaseServer.h"
-#include "ModbusADU.h"
+#include "ModbusPacket.h"
 
 using namespace std;
 
@@ -104,7 +104,6 @@ template <typename T> void BaseServer<T>::Listen()
         int szClientAddress = sizeof(clientAddress);
 
         SOCKET clientSocket = accept(ServerSocket, (SOCKADDR*) &clientAddress, &szClientAddress);
-
         if (clientSocket == INVALID_SOCKET)
         {
             cout << "Failed to accept client request" << endl;
@@ -153,6 +152,8 @@ template <typename T> void BaseServer<T>::HandleClient(ClientConnectionData conn
 	while (true)
 	{
 		T recvData;
+        memset(&recvData, 0, sizeof(recvData));
+
         fd_set readset; //data structure that represents a set of socket descriptors (array of integers)
         FD_ZERO(&readset); //clear out the set of sockets
         FD_SET(connectionData.clientSocket, &readset); //add specific socket to to the set
@@ -183,36 +184,34 @@ template <typename T> void BaseServer<T>::HandleClient(ClientConnectionData conn
                 break;
             }
 
-            //Send back what we received as the default response
-            T responseData = GenerateResponse(recvData);
+            T responseData = GetResponse(recvData);
 
             success = Send(connectionData.clientSocket, responseData);
 		
 		}
 	}
 
-	closesocket(connectionData.clientSocket);
     cout << "\nDISCONNECTED: Client #" << connectionData.threadId << "\n";
-
+    closesocket(connectionData.clientSocket);
 	int currentCount = ClientCount.load();
 	ClientCount.store(currentCount - 1);
 }
 
 template <typename T> bool BaseServer<T>::Receive(SOCKET clientSocket, T* receiveData)
 {
-	int bytesReceived = recv(clientSocket, (char *) receiveData, MAX_DATA_SIZE_BYTES, 0);
+    int size = sizeof(T);
+	int bytesReceived = recv(clientSocket, (char *) receiveData, size, 0);
 
-    T* castedData = (T*) receiveData;
-
-	if (bytesReceived <= SOCKET_ERROR)
+	if (bytesReceived <= 0)
 	{
+        cout << "Error receiving data: " << WSAGetLastError() << endl;
         return false;
 	}
 
     return true;
 }
 
-template <typename T> T BaseServer<T>::GenerateResponse(T clientRequestData)
+template <typename T> T BaseServer<T>::GetResponse(T clientRequestData)
 {
     return clientRequestData;
 }
@@ -232,5 +231,4 @@ template <typename T> bool BaseServer<T>::Send(SOCKET clientSocket, T sendData)
 
 //explicitly inform compiler of the instantiations that will be used 
 
-template class BaseServer<ModbusADU>;
-template class BaseServer<char*>;
+template class BaseServer<ModbusPacket>;

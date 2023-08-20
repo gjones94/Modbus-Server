@@ -24,7 +24,7 @@
     <ClCompile Include="ModbusSlave.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
-    <ClCompile Include="ModbusADU.cpp">
+    <ClCompile Include="ModbusPacket.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
   </ItemGroup>
@@ -35,7 +35,7 @@
     <ClInclude Include="ModbusSlave.h">
       <Filter>Header Files</Filter>
     </ClInclude>
-    <ClInclude Include="ModbusADU.h">
+    <ClInclude Include="ModbusPacket.h">
       <Filter>Header Files</Filter>
     </ClInclude>
   </ItemGroup>

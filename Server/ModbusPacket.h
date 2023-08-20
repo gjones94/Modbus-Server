@@ -7,6 +7,34 @@ using namespace std;
 
 #define MAX_DATA_LENGTH 250
 
+enum Request : int
+{
+	ADDR_HI = 0,
+	ADDR_LO = 1,
+	SIZE_HI = 2,
+	SIZE_LO = 3
+};
+
+enum Response : int
+{
+	RESPONSE_SIZE = 0,
+	RESPONSE_VALUES = 1
+};
+
+enum ErrorCodes : uint8_t
+{
+	IllegalFunction = 0x01,
+	IllegalAddress = 0x02,
+	IllegalDataValue = 0x03,
+	SlaveDeviceFailure = 0x04,
+	Acknowledge = 0x05,
+	SlaveDeviceBusy = 0x06,
+	NegativeAcknlowedge = 0x07,
+	MemoryParityError = 0x08,
+	GatewayPathUnavailable = 0x10,
+	GatewayFailedToResponse = 0x11
+};
+
 enum FunctionCodes : uint8_t
 {
 	ReadCoilStatus = 0x01,
@@ -25,14 +53,14 @@ enum CoilStatus : uint16_t
 	OFF = 0x0000
 };
 
-typedef struct ResponseData
+struct ResponseData
 {
 	uint8_t response_code;
 	uint8_t data_size;
 	uint8_t* data;
-} ResponseData;
+};
 
-class ModbusADU
+class ModbusPacket
 {
 	public:
 		/* MBAP */
@@ -47,4 +75,3 @@ class ModbusADU
 
 		void FixHeaderByteOrder();
 };
-

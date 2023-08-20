@@ -26,8 +26,6 @@ using namespace std;
 #define MAX_IP_LENGTH 16
 #define RESULT_TIMEOUT 0
 
-const char CLIENT_DISCONNECT[] = "Exit";
-
 typedef struct ClientConnectionData
 {
 	int threadId;
@@ -86,6 +84,6 @@ class BaseServer
 
 		bool Receive(SOCKET clientSocket, T *receiveData);
 
-		virtual T GenerateResponse(T clientRequestData);
+		virtual T GetResponse(T clientRequestData);
 };
 

@@ -129,12 +129,12 @@
   <ItemGroup>
     <ClCompile Include="Main.cpp" />
     <ClCompile Include="BaseServer.cpp" />
-    <ClCompile Include="ModbusADU.cpp" />
+    <ClCompile Include="ModbusPacket.cpp" />
     <ClCompile Include="ModbusSlave.cpp" />
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="BaseServer.h" />
-    <ClInclude Include="ModbusADU.h" />
+    <ClInclude Include="ModbusPacket.h" />
     <ClInclude Include="ModbusSlave.h" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />

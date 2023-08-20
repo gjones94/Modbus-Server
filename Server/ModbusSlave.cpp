@@ -10,11 +10,21 @@ ModbusSlave::ModbusSlave(int port)
 
 void ModbusSlave::InitializeMemory()
 {
-	Coils = (uint16_t*) calloc(DATA_BLOCK_SIZE, sizeof(uint16_t));
-	InputStatuses = (uint16_t*) calloc(DATA_BLOCK_SIZE, sizeof(uint16_t));
+	CoilRegisters = (bool*) calloc(DATA_BLOCK_SIZE * BITS_PER_REG, sizeof(bool));
+	StatusRegisters = (bool*) calloc(DATA_BLOCK_SIZE * BITS_PER_REG, sizeof(bool));
+
+	StatusRegisters[0] = true;
+	StatusRegisters[1] = true;
+	StatusRegisters[2] = true;
+	StatusRegisters[3] = true;
+
+	StatusRegisters[4] = false;
+	StatusRegisters[5] = true;
+	StatusRegisters[6] = false;
+	StatusRegisters[7] = true;
+
 	InputRegisters = (uint16_t*) calloc(DATA_BLOCK_SIZE, sizeof(uint16_t));
 	HoldingRegisters = (uint16_t*) calloc(DATA_BLOCK_SIZE, sizeof(uint16_t));
-	cout << "Memory initialized" << endl;
 }
 
 void ModbusSlave::Start()
@@ -22,37 +32,38 @@ void ModbusSlave::Start()
 	BaseServer::Start();
 }
 
-ModbusADU ModbusSlave::GenerateResponse(ModbusADU requestPacket)
+/*
+	Response
+	====================================================================
+	1) MBAP Header
+	2) Function Code
+	3) Data Requested (Functions 1-4) // Data Value Written (Functions 5, 6) // # Written (Functions 15, 16)
+	====================================================================
+*/
+ModbusPacket ModbusSlave::GetResponse(ModbusPacket request)
 {
-	/*
-		Response:
-		1) MBAP Header
-		2) Function Code
-		3) Data Requested (1-4) // Data Written (5, 6) // #Written (15, 16)
-	*/
+	request.FixHeaderByteOrder();
+	PrintHeader(request);
 
-	requestPacket.FixHeaderByteOrder();
-	PrintHeader(requestPacket);
+	ModbusPacket response;
+	ResponseData response_data{};
 
-	cout << endl << "=======Request Data=======" << endl;
-	cout << "Function Code: " << GetFunctionName(requestPacket.FunctionCode) << endl;
+	uint16_t size = GetSizeRequested(request.Data);
+	uint16_t address = GetStartAddress(request.Data);
 
-	ModbusADU responsePacket;
-	uint8_t responseCode;
-
-	switch (requestPacket.FunctionCode)
+	switch (request.FunctionCode)
 	{
 		case ReadCoilStatus:
-			responseCode = Read(COIL, requestPacket.Data);
+			response_data = ReadCoilStatusRegisters(CoilRegisters, address, size);
 			break;
 		case ReadInputStatus:
-			responseCode = Read(INPUT_STATUS, requestPacket.Data);
+			response_data = ReadCoilStatusRegisters(StatusRegisters, address, size);
 			break;
 		case ReadHoldingRegister:
-			responseCode = Read(HOLDING_REGISTER, requestPacket.Data);
+			//responseData = Read(HOLDING_REGISTER, &request);
 			break;
 		case ReadInputRegister:
-			responseCode = Read(INPUT_REGISTER, requestPacket.Data);
+			//responseData = Read(INPUT_REGISTER, &request);
 			break;
 		case ForceSingleCoil:
 			break;
@@ -64,62 +75,106 @@ ModbusADU ModbusSlave::GenerateResponse(ModbusADU requestPacket)
 			break;
 	}
 
-	cout << endl << "==========================" << endl;
-
-	return responsePacket;
+	response_data.response_code = (response_data.response_code == BAD) ? request.FunctionCode | ERROR_FLAG : request.FunctionCode;
+	response.TransactionId = htons(request.TransactionId);
+	response.ProtocolId = htons(request.ProtocolId);
+	response.MessageLength = htons(2 + response_data.data_size);
+	response.UnitId = request.UnitId;
+	response.FunctionCode = response_data.response_code;
+	response.Data[RESPONSE_SIZE] = response_data.data_size;
+	memcpy((response.Data + RESPONSE_VALUES), response_data.data, response_data.data_size);
+	
+	return response;
 }
 
-uint8_t ModbusSlave::Read(uint16_t registerType, uint8_t *requestData)
+/*
+	Read the Coil or Input Status Registers
+	
+	Response:
+	====================================================================
+	Example:
+	We request 20 bits
+
+	1) Function Code (If Success)
+	2) # Bytes to follow (containing the data acquired)
+    3) Bytes Read **(See note below)
+		Byte 1: 0110 000(1) <- First Address
+		Byte 2: 1010 0101
+		Byte 3: 0000 1001 //pad with 0s after 20th bit finished
+
+	** The value of the coil/status at starting address in the request
+	     Is to be stored in the LSB (far right). The last bit will be stored
+		 in the MSB (Far left) and remaining space not filled in the byte
+		 will be padded with zeros
+	====================================================================
+*/
+ResponseData ModbusSlave::ReadCoilStatusRegisters(bool* registers, uint16_t address, uint16_t size)
 {
-	uint16_t startAddress = GetRawStartAddress(requestData);
-	uint16_t numberRequested = GetNumberRequested(requestData);
-
 	ResponseData response;
-	int registersToRead = 0;
-	cout << "Number of values requested: " << numberRequested << endl;
+	bool boolArray[BYTE_LENGTH];
+	bool needsPadding = false;
+	int bytesNeeded = (uint8_t)ceil((double)size / BYTE_LENGTH); //round up # bytes needed. If 17 bits, need 3 bytes (24 bits)
 
-	//Allocate memory for response data
-	switch (registerType)
+	response.data_size = bytesNeeded;
+	response.data = new uint8_t[response.data_size];
+
+	for (int i = address; i < address + size; i ++)
 	{
-		case COIL:
-		case INPUT_STATUS:
-			response.data_size = (uint8_t) ceil( (double) numberRequested / BITS_PER_BYTE );
-			response.data = (uint8_t*) calloc(response.data_size, sizeof(byte));
-			break;
-		case INPUT_REGISTER:
-		case HOLDING_REGISTER:
-			response.data_size = (uint8_t) numberRequested * BYTES_PER_REG;
-			response.data = (uint8_t*) calloc(response.data_size, sizeof(byte));
-			break;
-		default:
-			return -1;
+		if (boolArray != nullptr)
+		{
+			int numberOfValues = BYTE_LENGTH;
+
+			//if next block exceeds total size requested, minimize acquisition to the request size
+			if ((i + BYTE_LENGTH) > size)
+			{
+				numberOfValues = size - i;
+				needsPadding = true;
+			}
+
+			//store the values from this register block
+			memcpy(boolArray, registers + i, numberOfValues);
+
+			if (needsPadding)
+			{
+				for (int j = numberOfValues; j < BYTE_LENGTH; j++)
+				{
+					boolArray[j] = false;
+				}
+			}
+
+			//iterating through array gives us MSB. We need LSB, so we will reverse the array
+			Reverse<bool>(boolArray, BYTE_LENGTH);
+
+			if (response.data != nullptr)
+			{
+				response.data[i] = GetByte(boolArray); //convert boolean array to a uint8_t byte
+			}
+		}
+		else
+		{
+			cout << "Failed to allocate memory for data acquisition" << endl;
+		}
 	}
 
-	registersToRead = ceil((double) response.data_size / 2);
-	cout << "Registers to read: " << registersToRead << endl;
+	response.response_code = GOOD;
 
-	for (uint16_t i = startAddress; i < (startAddress + registersToRead); i += 1)
-	{
-		uint16_t value = Coils[i];
-		cout << "Value of data = ";
-		PrintBinary(value);
-		cout << endl;
-	}
+	return response;
+}
 
-	cout << "Total Bytes Read: " << (int) response.data_size << endl;
-
-	return 1;
+bool ModbusSlave::Success(uint8_t functionCode)
+{
+	bool success = (functionCode & ERROR) == 0;
+	return success;
 }
 
 void ModbusSlave::EnableZeroBasedAddressing(bool enabled)
 {
 	ZeroBasedAddressing = enabled;
-	cout << "Zero Based Addressing" << (enabled ? " enabled" : " disabled") << endl;
 }
 
-uint16_t ModbusSlave::GetRawStartAddress(uint8_t *data)
+uint16_t ModbusSlave::GetStartAddress(uint8_t *requestData)
 {
-	uint16_t address = ntohs(MAKEWORD(data[ADDR_HI], data[ADDR_LO])); //smash registers and reverse MSB to LSB
+	uint16_t address = ntohs(MAKEWORD(requestData[ADDR_HI], requestData[ADDR_LO])); //smash registers and reverse MSB to LSB
 
 	if (ZeroBasedAddressing == false)
 	{
@@ -129,12 +184,12 @@ uint16_t ModbusSlave::GetRawStartAddress(uint8_t *data)
 	return address;
 }
 
-uint16_t ModbusSlave::GetNumberRequested(uint8_t* data)
+uint16_t ModbusSlave::GetSizeRequested(uint8_t* requestData)
 {
-	return ntohs(MAKEWORD(data[NUM_REQ_HI], data[NUM_REQ_LO]));
+	return ntohs(MAKEWORD(requestData[SIZE_HI], requestData[SIZE_LO]));
 }
 
-void ModbusSlave::PrintHeader(ModbusADU packet)
+void ModbusSlave::PrintHeader(ModbusPacket packet)
 {
 	cout << endl << "=======Request Header Data=======" << endl;
 	cout << "TransactionId: " << packet.TransactionId << endl;
@@ -145,38 +200,81 @@ void ModbusSlave::PrintHeader(ModbusADU packet)
 
 }
 
-uint16_t ModbusSlave::GetModbusAddress(uint8_t functionCode, uint16_t rawAddress)
+
+/*
+	Reverse: Reverse the the order of elements in an array
+	====================================================================
+	Algorithm
+	swapping values beginning and end values until we reach halfway point
+	i-> 	<-j
+	1 2 3 4 5 6
+	====================================================================
+*/
+template <typename T>
+void Reverse(T* array, int size)
 {
-	int registerStartAddress;
 
-	switch (functionCode)
+	for (int i = 0; i < (size / 2); i++)
 	{
-	case ReadCoilStatus:
-	case ForceSingleCoil:
-	case ForceMultipleCoils:
-		registerStartAddress = COIL;
-		break;
-	case ReadInputStatus:
-		registerStartAddress = INPUT_STATUS;
-		break;
-	case ReadHoldingRegister:
-	case PresetSingleRegister:
-	case PresetMultipleRegisters:
-		registerStartAddress = HOLDING_REGISTER;
-		break;
-	case ReadInputRegister:
-		registerStartAddress = INPUT_REGISTER;
-		break;
-	default:
-		registerStartAddress = -1;
+		int j = size - i - 1;
+		T swap = array[j];
+		array[j] = array[i];
+		array[i] = swap;
 	}
-
-	return registerStartAddress + rawAddress;
 }
 
-void ModbusSlave::PrintBinary(uint16_t value)
+
+/*
+	GetByte
+	====================================================================
+	Algorithm
+	[F] T T T F T -> (array), start index 0
+	 1  0 0 0 0 0 -> IF (array[index] = True)  { OR with 1 bit on far left }
+	 0  1 0 0 0 0 -> IF (array[index] = True)  { OR with 1 bit on end shifted right by index count }
+	 0  0 1 0 0 0 -> IF (array[index] = True)  { OR with 1 bit on end shifted right by index count }
+	 ------------
+	 0  1 1 1 0 1 RESULTING BINARY
+	====================================================================
+*/
+uint8_t GetByte(bool* array)
 {
-	for (uint16_t i = 1 << 15; i > 0; i >>= 1)
+	uint8_t byte = 0;
+
+	int farLeftBit = 1 << (BYTE_LENGTH - 1);
+
+	for (int i = 0; i < BYTE_LENGTH; i++) //move right
+	{
+		if (array[i] == true)
+		{
+			byte |= (farLeftBit >> i); //shift right
+		}
+	}
+
+	return byte;
+}
+
+template<typename T>
+void PrintArray(const T* array, int size)
+{
+	cout << endl;
+	cout << "Array Values";
+	cout << "====================================================================" << endl;
+	for (int i = 0; i < size; i++)
+	{
+		cout << "i: " << i << " value: " << (T)array[i] << endl;
+	}
+	cout << "====================================================================" << endl;
+	cout << endl;
+}
+
+template <typename T>
+void PrintBinary(T value)
+{
+	cout << endl;
+	cout << "Binary" << endl;
+	cout << "====================================================================" << endl;
+	int dataSize = (sizeof(T) * BYTE_LENGTH);
+	for (int i = 1 << (dataSize - 1); i > 0; i >>= 1)
 	{
 		if (i & value)
 		{
@@ -188,29 +286,6 @@ void ModbusSlave::PrintBinary(uint16_t value)
 		}
 	}
 	printf("\n");
+	cout << "====================================================================" << endl;
 }
 
-string ModbusSlave::GetFunctionName(uint8_t functionCode)
-{
-	switch (functionCode)
-	{
-	case ReadCoilStatus:
-		return "Read Coil";
-	case ReadInputStatus:
-		return "Read Input Status";
-	case ReadHoldingRegister:
-		return "Read Holding Register";
-	case ReadInputRegister:
-		return "Read Input Register";
-	case ForceSingleCoil:
-		return "Force Single Coil";
-	case PresetSingleRegister:
-		return "Preset Single Register";
-	case ForceMultipleCoils:
-		return "Force Multiple Coils";
-	case PresetMultipleRegisters:
-		return "Preset Multiple Registers";
-	default:
-		return "Unknown Function";
-	}
-}

@@ -1,30 +1,32 @@
 #pragma once
 #include "BaseServer.h"
-#include "ModbusADU.h"
+#include "ModbusPacket.h"
 #include <cmath>
 
-#define START_ADDRESS 1
 #define DATA_BLOCK_SIZE 4096
-#define BITS_PER_BYTE 8
+#define BYTE_LENGTH 8
 #define BYTES_PER_REG 2
+#define BITS_PER_REG 16
+#define ERROR_FLAG 0b10000000
 
-enum REQUEST : int
+template <typename T>
+void Reverse(T* array, int size);
+
+template <typename T>
+void PrintArray(const T* array, int size);
+
+template <typename T>
+void PrintBinary(T value);
+
+uint8_t GetByte(bool* array);
+
+enum Status : uint8_t
 {
-	ADDR_HI = 0,
-	ADDR_LO = 1,
-	NUM_REQ_HI = 2,
-	NUM_REQ_LO = 3
+	BAD = 0x00,
+	GOOD = 0xFF,
 };
 
-enum RegisterType : uint16_t
-{
-	COIL = 00001,
-	INPUT_STATUS = 10001,
-	INPUT_REGISTER = 30001,
-	HOLDING_REGISTER = 40001
-};
-
-class ModbusSlave : public BaseServer<ModbusADU>
+class ModbusSlave : public BaseServer<ModbusPacket>
 {
 	public:
 		ModbusSlave(int port);
@@ -32,8 +34,8 @@ class ModbusSlave : public BaseServer<ModbusADU>
 
 	private:
 		/* Memory Blocks */
-		uint16_t* Coils; //4096
-		uint16_t* InputStatuses; //4096
+		bool* CoilRegisters; //65536
+		bool* StatusRegisters; //65536
 		uint16_t* InputRegisters; //4096
 		uint16_t* HoldingRegisters; //4096
 
@@ -44,18 +46,21 @@ class ModbusSlave : public BaseServer<ModbusADU>
 		void InitializeMemory();
 		void EnableZeroBasedAddressing(bool enabled);
 
-		/* General Methods */
-		ModbusADU GenerateResponse(ModbusADU data) override;
-		uint8_t Read(uint16_t registerType, uint8_t *requestData);
+		/* Request Methods */
+		uint16_t GetStartAddress(uint8_t *requestData);
+		uint16_t GetSizeRequested(uint8_t *requestData);
 
-		/* Helpers */
-		string GetFunctionName(uint8_t functionCode);
-		uint16_t GetRawStartAddress(uint8_t *data);
-		uint16_t GetNumberRequested(uint8_t *data);
-		uint16_t GetModbusAddress(uint8_t functionCode, uint16_t rawAddress);
+		/* Response Methods */
+		ModbusPacket GetResponse(ModbusPacket request) override;
+
+		/* Read/Write Methods */
+		ResponseData ReadCoilStatusRegisters(bool* registers, uint16_t address, uint16_t size);
+
+		/* Exception Reporting */
+		bool Success(uint8_t functionCode);
 
 		/* Diagnostics */
-		void PrintHeader(ModbusADU packet);
-		void PrintBinary(uint16_t value);
+		void PrintHeader(ModbusPacket packet);
+
 };
 
