@@ -45,11 +45,11 @@ ModbusPacket ModbusSlave::GetResponse(ModbusPacket request)
 	request.FixHeaderByteOrder();
 	PrintHeader(request);
 
-	ModbusPacket response;
-	ResponseData response_data;
-
 	uint16_t size = GetSizeRequested(request.Data);
 	uint16_t address = GetStartAddress(request.Data);
+
+	ModbusPacket response;
+	ResponseData *response_data = nullptr;
 
 	switch (request.FunctionCode)
 	{
@@ -75,14 +75,18 @@ ModbusPacket ModbusSlave::GetResponse(ModbusPacket request)
 			break;
 	}
 
-	response_data.response_code = (response_data.response_code == BAD) ? request.FunctionCode | ERROR_FLAG : request.FunctionCode;
+	response_data->response_code = (response_data->response_code == BAD) ? request.FunctionCode | ERROR_FLAG : request.FunctionCode;
 	response.TransactionId = htons(request.TransactionId);
 	response.ProtocolId = htons(request.ProtocolId);
-	response.MessageLength = htons(2 + response_data.data_size);
+	response.MessageLength = htons(2 + response_data->data_size);
 	response.UnitId = request.UnitId;
-	response.FunctionCode = response_data.response_code;
-	response.Data[RESPONSE_SIZE] = response_data.data_size;
-	memcpy((response.Data + RESPONSE_VALUES), response_data.data, response_data.data_size);
+	response.FunctionCode = response_data->response_code;
+	response.Data[RESPONSE_SIZE] = response_data->data_size;
+	for (int i = RESPONSE_VALUES; i < RESPONSE_VALUES + response_data->data_size; i++)
+	{
+		response.Data[i] = response_data->data[i-1];
+	}
+	//memcpy(response.Data + RESPONSE_VALUES, response_data->data, response_data->data_size);
 	
 	return response;
 }
@@ -108,55 +112,45 @@ ModbusPacket ModbusSlave::GetResponse(ModbusPacket request)
 		 will be padded with zeros
 	====================================================================
 */
-ResponseData ModbusSlave::ReadCoilStatusRegisters(bool* registers, uint16_t address, uint16_t size)
+ResponseData* ModbusSlave::ReadCoilStatusRegisters(bool* registers, uint16_t address, uint16_t size)
 {
-	ResponseData response;
 	bool boolArray[BYTE_LENGTH];
 	bool needsPadding = false;
-	int bytesNeeded = (uint8_t)ceil((double)size / BYTE_LENGTH); //round up # bytes needed. If 17 bits, need 3 bytes (24 bits)
+	int numBytesRequested = (uint8_t)ceil((double)size / BYTE_LENGTH); //round up # bytes needed. If 17 bits, need 3 bytes (24 bits)
+	int currentByte = 0;
+	ResponseData *response = new ResponseData(numBytesRequested);
 
-	response.data_size = bytesNeeded;
-	response.data = new uint8_t[response.data_size];
-
-	for (int i = address; i < address + size; i ++)
+	for (int i = address; i < address + size; i += BYTE_LENGTH)
 	{
-		if (boolArray != nullptr)
+		int numberOfValues = BYTE_LENGTH;
+
+		//if next block exceeds total size requested, minimize acquisition to the request size
+		if ((i + BYTE_LENGTH) > size)
 		{
-			int numberOfValues = BYTE_LENGTH;
+			numberOfValues = size - i;
+			needsPadding = true;
+		}
 
-			//if next block exceeds total size requested, minimize acquisition to the request size
-			if ((i + BYTE_LENGTH) > size)
+		//store the values from this register block
+		memcpy(boolArray, registers + i, numberOfValues);
+
+		if (needsPadding)
+		{
+			for (int j = numberOfValues; j < BYTE_LENGTH; j++)
 			{
-				numberOfValues = size - i;
-				needsPadding = true;
-			}
-
-			//store the values from this register block
-			memcpy(boolArray, registers + i, numberOfValues);
-
-			if (needsPadding)
-			{
-				for (int j = numberOfValues; j < BYTE_LENGTH; j++)
-				{
-					boolArray[j] = false;
-				}
-			}
-
-			//iterating through array gives us MSB. We need LSB, so we will reverse the array
-			Reverse<bool>(boolArray, BYTE_LENGTH);
-
-			if (response.data != nullptr)
-			{
-				response.data[i] = GetByte(boolArray); //convert boolean array to a uint8_t byte
+				boolArray[j] = false;
 			}
 		}
-		else
+
+		//iterating through array gives us MSB. We need LSB, so we will reverse the array
+		Reverse<bool>(boolArray, BYTE_LENGTH);
+
+		if (response->data != nullptr)
 		{
-			cout << "Failed to allocate memory for data acquisition" << endl;
+			response->data[currentByte] = GetByte(boolArray); //convert boolean array to a uint8_t byte
+			currentByte += 1;
 		}
 	}
-
-	response.response_code = GOOD;
 
 	return response;
 }

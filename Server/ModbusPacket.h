@@ -7,6 +7,12 @@ using namespace std;
 
 #define MAX_DATA_LENGTH 250
 
+enum Status : uint8_t
+{
+	BAD = 0x00,
+	GOOD = 0xFF,
+};
+
 enum Request : int
 {
 	ADDR_HI = 0,
@@ -58,6 +64,20 @@ struct ResponseData
 	uint8_t response_code;
 	uint8_t data_size;
 	uint8_t* data;
+
+	ResponseData() {}
+
+	ResponseData(uint8_t size)
+	{
+		response_code = GOOD;
+		data_size = size;
+		data = new uint8_t[size];
+	}
+
+	~ResponseData()
+	{
+		delete[] data;
+	}
 };
 
 class ModbusPacket

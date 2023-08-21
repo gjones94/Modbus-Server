@@ -20,11 +20,7 @@ void PrintBinary(T value);
 
 uint8_t GetByte(bool* array);
 
-enum Status : uint8_t
-{
-	BAD = 0x00,
-	GOOD = 0xFF,
-};
+
 
 class ModbusSlave : public BaseServer<ModbusPacket>
 {
@@ -54,7 +50,7 @@ class ModbusSlave : public BaseServer<ModbusPacket>
 		ModbusPacket GetResponse(ModbusPacket request) override;
 
 		/* Read/Write Methods */
-		ResponseData ReadCoilStatusRegisters(bool* registers, uint16_t address, uint16_t size);
+		ResponseData* ReadCoilStatusRegisters(bool* registers, uint16_t address, uint16_t size);
 
 		/* Exception Reporting */
 		bool Success(uint8_t functionCode);

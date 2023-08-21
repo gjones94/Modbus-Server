@@ -210,7 +210,7 @@ template <typename T> T BaseServer<T>::GetResponse(T clientRequestData)
 
 template <typename T> bool BaseServer<T>::Send(SOCKET clientSocket, T sendData)
 {
-    int bytesSent = send(clientSocket, (char*) &sendData, MAX_DATA_SIZE_BYTES, 0);
+    int bytesSent = send(clientSocket, (char*) &sendData, sizeof(T), 0);
 
     if (bytesSent <= SOCKET_ERROR)
     {
