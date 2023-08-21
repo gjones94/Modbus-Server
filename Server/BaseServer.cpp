@@ -123,9 +123,9 @@ template <typename T> void BaseServer<T>::Listen()
                 thread, we have to use & and this in the thread call
                 otherwise, we could just do: thread(HandleClient, clientSocket)
             */
-            ClientConnectionData data { clientCount + 1, clientSocket, clientAddress };
-            thread new_connection(&BaseServer::HandleClient, this, data);
-            new_connection.detach(); //Detach so that the client data doesn't get invalidated on next loop
+            HandleClient(clientSocket);
+            //thread new_connection(&BaseServer::HandleClient, this, clientSocket);
+            //new_connection.detach(); //Detach so that the client data doesn't get invalidated on next loop
 
         }
         else 
@@ -139,15 +139,9 @@ template <typename T> void BaseServer<T>::Listen()
     WSACleanup();
 }
 
-template <typename T> void BaseServer<T>::HandleClient(ClientConnectionData connectionData)
+template <typename T> void BaseServer<T>::HandleClient(SOCKET socket)
 {
     bool success;
-    //Increase the count of clients in use
-    int clientCount = ClientCount.load();
-    ClientCount.store(clientCount + 1);
-
-    cout << endl << "CONNECTED: Client #" << clientCount << endl;
-
     int monitorResult;
 	while (true)
 	{
@@ -156,7 +150,7 @@ template <typename T> void BaseServer<T>::HandleClient(ClientConnectionData conn
 
         fd_set readset; //data structure that represents a set of socket descriptors (array of integers)
         FD_ZERO(&readset); //clear out the set of sockets
-        FD_SET(connectionData.clientSocket, &readset); //add specific socket to to the set
+        FD_SET(socket, &readset); //add specific socket to to the set
 
         timeval timeout;
         timeout.tv_sec = SOCKET_TIMEOUT; 
@@ -170,14 +164,14 @@ template <typename T> void BaseServer<T>::HandleClient(ClientConnectionData conn
         }
         else if (monitorResult == RESULT_TIMEOUT)
         {
-            cout << "\nTIMEOUT: Client #" << connectionData.threadId << "\n";
+            //cout << "\nTIMEOUT: Client #" << connectionData.threadId << "\n";
             break;
         }
 
         //socket is ready to read data
-        if (FD_ISSET(connectionData.clientSocket, &readset)) 
+        if (FD_ISSET(socket, &readset))
         {
-            success = Receive(connectionData.clientSocket, &recvData);
+            success = Receive(socket, &recvData);
 
             if (success == false)
             {
@@ -186,21 +180,18 @@ template <typename T> void BaseServer<T>::HandleClient(ClientConnectionData conn
 
             T responseData = GetResponse(recvData);
 
-            success = Send(connectionData.clientSocket, responseData);
+            success = Send(socket, responseData);
 		
 		}
 	}
 
-    cout << "\nDISCONNECTED: Client #" << connectionData.threadId << "\n";
-    closesocket(connectionData.clientSocket);
-	int currentCount = ClientCount.load();
-	ClientCount.store(currentCount - 1);
+    closesocket(socket);
 }
 
 template <typename T> bool BaseServer<T>::Receive(SOCKET clientSocket, T* receiveData)
 {
     int size = sizeof(T);
-	int bytesReceived = recv(clientSocket, (char *) receiveData, size, 0);
+	int bytesReceived = recv(clientSocket, reinterpret_cast<char*>(receiveData), size, 0);
 
 	if (bytesReceived <= 0)
 	{

@@ -78,7 +78,7 @@ class BaseServer
 		/// Client communication handler that runs on a separate thread
 		/// </summary>
 		/// <param name="data"></param>
-		void HandleClient(ClientConnectionData data);
+		void HandleClient(SOCKET socket);
 
 		bool Send(SOCKET clientSocket, T sendData);
 

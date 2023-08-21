@@ -46,7 +46,7 @@ ModbusPacket ModbusSlave::GetResponse(ModbusPacket request)
 	PrintHeader(request);
 
 	ModbusPacket response;
-	ResponseData response_data{};
+	ResponseData response_data;
 
 	uint16_t size = GetSizeRequested(request.Data);
 	uint16_t address = GetStartAddress(request.Data);
