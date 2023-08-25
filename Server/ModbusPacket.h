@@ -5,26 +5,79 @@
 
 using namespace std;
 
-#define MAX_DATA_LENGTH 250
+/*
+	MODBUS PACKET
 
-enum Status : uint8_t
+	REQUESTS
+	--------
+	All TCP Request Packets have the following structure to start:
+	- uint8_t Slave Address
+	- uint8_t Function Code
+	- uint16_t Starting Data Address
+	
+	After this, there are some differences between read, write, and multiple write
+	Read (Function 1 - 4):
+	- uint16_t Size Requested
+	
+	Write (single) (Function 5 & 6):
+	- uint16_t Value to write
+
+	Write Multiple (Function 15 & 16):
+	- uint16_t Number Coils/Registers Requested
+	- uint8_t Number of BYTES to follow (Calculated based on 8 coils per byte or 2 bytes per register)
+	--------
+
+	RESPONSES
+	---------
+
+
+	---------
+*/
+
+enum STATUS : uint8_t
 {
-	BAD = 0x00,
-	GOOD = 0xFF,
+	/* Bit masks for function code */
+	GOOD = 0xFF, /* &= returns the same value */
+	BAD = 0x80, /* |= sets the far left bit for error */
 };
 
-enum Request : int
+enum TCP_REQUST : int
 {
-	ADDR_HI = 0,
-	ADDR_LO = 1,
-	SIZE_HI = 2,
-	SIZE_LO = 3
+	TID_HI,
+	TID_LO,
+	PID_HI,
+	PID_LO,
+	LEN_HI,
+	LEN_LO,
+	UID,
+	FCODE,
+	ADDR_HI,
+	ADDR_LO,
+	DATA
 };
 
-enum Response : int
+/* REQUESTS */
+enum REQ_TCP_READ : int
 {
-	RESPONSE_SIZE = 0,
-	RESPONSE_VALUES = 1
+	REQ_SIZE_HI = 0,
+	REQ_SIZE_LO = 1
+};
+
+enum REQ_TCP_WRITE_SINGLE : int
+{
+	REQ_VALUE_HI = 0,
+	REQ_VALUE_LO = 1
+};
+
+enum REQ_TCP_WRITE_MULTIPLE : int
+{
+	REQ_SIZE = 1
+};
+
+enum RESP_TCP_READ : int
+{
+	RESP_SIZE = 0,
+	RESP_DATA_START = 1
 };
 
 enum ErrorCodes : uint8_t
@@ -53,10 +106,12 @@ enum FunctionCodes : uint8_t
 	PresetMultipleRegisters = 0x10
 };
 
-enum CoilStatus : uint16_t
+enum ON_OFF : uint8_t
 {
-	ON = 0xFF00,
-	OFF = 0x0000
+	ON_HI = 0xFF,
+	ON_LO = 0x00,
+	OFF_HI = 0x00,
+	OFF_LO = 0x00
 };
 
 struct ResponseData
@@ -69,7 +124,7 @@ struct ResponseData
 
 	ResponseData(uint8_t size)
 	{
-		response_code = GOOD;
+		response_code = 0;
 		data_size = size;
 		data = new uint8_t[size];
 	}
@@ -91,7 +146,32 @@ class ModbusPacket
 
 		/* PDU */
 		uint8_t FunctionCode;
-		uint8_t Data[MAX_DATA_LENGTH];
+		uint16_t StartAddress;
+		uint8_t *Data;
 
+		/* Request Methods */
 		void FixHeaderByteOrder();
+		uint16_t GetStartAddress(bool zeroBasedAddressing);
+		uint16_t GetRequestSize();
+		uint16_t GetWriteValue();
+
+		/* Diagnostics */
+		void PrintHeader();
+
+		ModbusPacket() 
+		{
+			TransactionId = 0;
+			ProtocolId = 0;
+			MessageLength = 0;
+			UnitId = 0;
+			FunctionCode = 0;
+			StartAddress = 0;
+		};
+
+		/* Deconstructor */
+		~ModbusPacket()
+		{
+			delete[] Data;
+		}
+
 };

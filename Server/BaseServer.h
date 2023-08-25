@@ -8,7 +8,6 @@
 #include <string.h>
 #include <stdlib.h>
 #include <iostream>
-#include <vector>
 #include <csignal>
 #include <mutex>
 #include <Windows.h>
@@ -20,7 +19,7 @@ using namespace std;
 #define PORT 502
 #define SOCKET_TIMEOUT 60
 #define MAX_CLIENTS 30
-#define MAX_DATA_SIZE_BYTES 1024
+#define MAX_REQUEST_SIZE 1024
 /* ====END CONFIGURABLE====*/
 
 #define MAX_IP_LENGTH 16
@@ -82,8 +81,6 @@ class BaseServer
 
 		bool Send(SOCKET clientSocket, T sendData);
 
-		bool Receive(SOCKET clientSocket, T *receiveData);
-
-		virtual T GetResponse(T clientRequestData);
+		virtual T GetResponse(char* requestData);
 };
 

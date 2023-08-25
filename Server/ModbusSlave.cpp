@@ -1,4 +1,5 @@
 #include "ModbusSlave.h"
+#include "Utils.h"
 
 ModbusSlave::ModbusSlave(int port)
 {
@@ -10,8 +11,11 @@ ModbusSlave::ModbusSlave(int port)
 
 void ModbusSlave::InitializeMemory()
 {
+	//TODO use constructors instead
 	CoilRegisters = (bool*) calloc(DATA_BLOCK_SIZE * BITS_PER_REG, sizeof(bool));
 	StatusRegisters = (bool*) calloc(DATA_BLOCK_SIZE * BITS_PER_REG, sizeof(bool));
+	InputRegisters = (uint16_t*) calloc(DATA_BLOCK_SIZE, sizeof(uint16_t));
+	HoldingRegisters = (uint16_t*) calloc(DATA_BLOCK_SIZE, sizeof(uint16_t));
 
 	StatusRegisters[0] = true;
 	StatusRegisters[1] = true;
@@ -23,8 +27,21 @@ void ModbusSlave::InitializeMemory()
 	StatusRegisters[6] = false;
 	StatusRegisters[7] = true;
 
-	InputRegisters = (uint16_t*) calloc(DATA_BLOCK_SIZE, sizeof(uint16_t));
-	HoldingRegisters = (uint16_t*) calloc(DATA_BLOCK_SIZE, sizeof(uint16_t));
+	StatusRegisters[8] = false;
+	StatusRegisters[9] = true;
+	StatusRegisters[10] = false;
+	StatusRegisters[11] = true;
+
+	StatusRegisters[12] = false;
+	StatusRegisters[13] = true;
+	StatusRegisters[14] = false;
+	StatusRegisters[15] = true;
+
+	StatusRegisters[16] = true;
+	StatusRegisters[17] = true;
+	StatusRegisters[18] = true;
+	StatusRegisters[19] = false;
+
 }
 
 void ModbusSlave::Start()
@@ -40,24 +57,26 @@ void ModbusSlave::Start()
 	3) Data Requested (Functions 1-4) // Data Value Written (Functions 5, 6) // # Written (Functions 15, 16)
 	====================================================================
 */
-ModbusPacket ModbusSlave::GetResponse(ModbusPacket request)
+ModbusPacket ModbusSlave::GetResponse(char *requestData)
 {
-	request.FixHeaderByteOrder();
-	PrintHeader(request);
-
-	uint16_t size = GetSizeRequested(request.Data);
-	uint16_t address = GetStartAddress(request.Data);
+	ModbusPacket request = ParseRequest(requestData);
+	request.PrintHeader();
+	uint16_t startAddress = request.StartAddress;
+	uint16_t size = request.GetRequestSize();
 
 	ModbusPacket response;
-	ResponseData *response_data = nullptr;
+	response.TransactionId = htons(request.TransactionId);
+	response.ProtocolId = htons(request.ProtocolId);
+	response.UnitId = request.UnitId;
+	response.FunctionCode = request.FunctionCode;
 
 	switch (request.FunctionCode)
 	{
 		case ReadCoilStatus:
-			response_data = ReadCoilStatusRegisters(CoilRegisters, address, size);
+			ReadCoilStatusRegisters(CoilRegisters, startAddress, size, &response);
 			break;
 		case ReadInputStatus:
-			response_data = ReadCoilStatusRegisters(StatusRegisters, address, size);
+			ReadCoilStatusRegisters(StatusRegisters, startAddress, size, &response);
 			break;
 		case ReadHoldingRegister:
 			//responseData = Read(HOLDING_REGISTER, &request);
@@ -75,20 +94,37 @@ ModbusPacket ModbusSlave::GetResponse(ModbusPacket request)
 			break;
 	}
 
-	response_data->response_code = (response_data->response_code == BAD) ? request.FunctionCode | ERROR_FLAG : request.FunctionCode;
-	response.TransactionId = htons(request.TransactionId);
-	response.ProtocolId = htons(request.ProtocolId);
-	response.MessageLength = htons(2 + response_data->data_size);
-	response.UnitId = request.UnitId;
-	response.FunctionCode = response_data->response_code;
-	response.Data[RESPONSE_SIZE] = response_data->data_size;
-	for (int i = RESPONSE_VALUES; i < RESPONSE_VALUES + response_data->data_size; i++)
+	response.MessageLength = htons(response.MessageLength);
+	/*response.Data[RESP_SIZE] = response_data->data_size;
+
+	PrintBinary(response.Data[0]);
+	for (int i = RESP_DATA_START; i < (response_data->data_size + RESP_DATA_START); i++)
 	{
-		response.Data[i] = response_data->data[i-1];
-	}
+		response.Data[i] = response_data->data[i - 1];
+		PrintBinary(response.Data[i]);
+	}*/
 	//memcpy(response.Data + RESPONSE_VALUES, response_data->data, response_data->data_size);
 	
 	return response;
+}
+
+ModbusPacket ModbusSlave::ParseRequest(char* requestData)
+{
+	ModbusPacket request;
+	request.TransactionId = ntohs(MAKEWORD(requestData[TID_HI], requestData[TID_LO]));
+	request.ProtocolId = ntohs(MAKEWORD(requestData[PID_HI], requestData[PID_LO]));
+	request.MessageLength = ntohs(MAKEWORD(requestData[LEN_HI], requestData[LEN_LO]));
+	request.UnitId = requestData[UID];
+	request.FunctionCode = requestData[FCODE];
+	request.StartAddress = ntohs(MAKEWORD(requestData[ADDR_HI], requestData[ADDR_LO]));
+
+	int requestDataLength = request.MessageLength - sizeof(request.UnitId) - sizeof(request.FunctionCode) - sizeof(request.StartAddress);
+	
+	request.Data = new uint8_t[requestDataLength];
+
+	memcpy(request.Data, (requestData + DATA), requestDataLength);
+
+	return request;
 }
 
 /*
@@ -112,19 +148,26 @@ ModbusPacket ModbusSlave::GetResponse(ModbusPacket request)
 		 will be padded with zeros
 	====================================================================
 */
-ResponseData* ModbusSlave::ReadCoilStatusRegisters(bool* registers, uint16_t address, uint16_t size)
+
+/* TODO: Removing responseData object, and just passing the response in here as a pointer to be filled */
+void ModbusSlave::ReadCoilStatusRegisters(bool* registers, uint16_t address, uint16_t size, ModbusPacket *response)
 {
 	bool boolArray[BYTE_LENGTH];
 	bool needsPadding = false;
-	int numBytesRequested = (uint8_t)ceil((double)size / BYTE_LENGTH); //round up # bytes needed. If 17 bits, need 3 bytes (24 bits)
+	int numBytes = Utils::GetByteLengthForData(size, BITS_PER_COIL);
 	int currentByte = 0;
-	ResponseData *response = new ResponseData(numBytesRequested);
+	response->MessageLength = 3 + numBytes;
+	//response->MessageLength = sizeof(response->UnitId) + sizeof(response->FunctionCode) + numBytes + 1; /* 1 is the start of the data that specifies the number of data bytes retrieved*/
+	response->Data = new uint8_t[numBytes];
+	response->Data[currentByte++] = numBytes;
+
+	//ResponseData *response = new ResponseData(numBytesRequested);
 
 	for (int i = address; i < address + size; i += BYTE_LENGTH)
 	{
 		int numberOfValues = BYTE_LENGTH;
 
-		//if next block exceeds total size requested, minimize acquisition to the request size
+		//if next coil block exceeds total size requested, minimize acquisition to the request size
 		if ((i + BYTE_LENGTH) > size)
 		{
 			numberOfValues = size - i;
@@ -145,55 +188,18 @@ ResponseData* ModbusSlave::ReadCoilStatusRegisters(bool* registers, uint16_t add
 		//iterating through array gives us MSB. We need LSB, so we will reverse the array
 		Reverse<bool>(boolArray, BYTE_LENGTH);
 
-		if (response->data != nullptr)
+		if (response->Data != nullptr)
 		{
-			response->data[currentByte] = GetByte(boolArray); //convert boolean array to a uint8_t byte
-			currentByte += 1;
+			response->Data[currentByte++] = GetByte(boolArray); //convert boolean array to a uint8_t byte
 		}
+
 	}
-
-	return response;
-}
-
-bool ModbusSlave::Success(uint8_t functionCode)
-{
-	bool success = (functionCode & ERROR) == 0;
-	return success;
 }
 
 void ModbusSlave::EnableZeroBasedAddressing(bool enabled)
 {
 	ZeroBasedAddressing = enabled;
 }
-
-uint16_t ModbusSlave::GetStartAddress(uint8_t *requestData)
-{
-	uint16_t address = ntohs(MAKEWORD(requestData[ADDR_HI], requestData[ADDR_LO])); //smash registers and reverse MSB to LSB
-
-	if (ZeroBasedAddressing == false)
-	{
-		address -= 1;
-	}
-
-	return address;
-}
-
-uint16_t ModbusSlave::GetSizeRequested(uint8_t* requestData)
-{
-	return ntohs(MAKEWORD(requestData[SIZE_HI], requestData[SIZE_LO]));
-}
-
-void ModbusSlave::PrintHeader(ModbusPacket packet)
-{
-	cout << endl << "=======Request Header Data=======" << endl;
-	cout << "TransactionId: " << packet.TransactionId << endl;
-	cout << "ProtocolId: " << packet.ProtocolId << endl;
-	cout << "MessageLength: " << packet.MessageLength << endl;
-	cout << "UnitId: " << (int) packet.UnitId << endl;
-	cout << "=================================" << endl << endl;
-
-}
-
 
 /*
 	Reverse: Reverse the the order of elements in an array

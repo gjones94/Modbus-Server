@@ -6,6 +6,7 @@
 #define DATA_BLOCK_SIZE 4096
 #define BYTE_LENGTH 8
 #define BYTES_PER_REG 2
+#define BITS_PER_COIL 1
 #define BITS_PER_REG 16
 #define ERROR_FLAG 0b10000000
 
@@ -42,21 +43,11 @@ class ModbusSlave : public BaseServer<ModbusPacket>
 		void InitializeMemory();
 		void EnableZeroBasedAddressing(bool enabled);
 
-		/* Request Methods */
-		uint16_t GetStartAddress(uint8_t *requestData);
-		uint16_t GetSizeRequested(uint8_t *requestData);
-
 		/* Response Methods */
-		ModbusPacket GetResponse(ModbusPacket request) override;
+		ModbusPacket ParseRequest(char* requestData);
+		ModbusPacket GetResponse(char * requestData) override;
 
 		/* Read/Write Methods */
-		ResponseData* ReadCoilStatusRegisters(bool* registers, uint16_t address, uint16_t size);
-
-		/* Exception Reporting */
-		bool Success(uint8_t functionCode);
-
-		/* Diagnostics */
-		void PrintHeader(ModbusPacket packet);
-
+		void ReadCoilStatusRegisters(bool* registers, uint16_t address, uint16_t size, ModbusPacket *response);
 };
 
