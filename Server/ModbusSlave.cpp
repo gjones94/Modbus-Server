@@ -77,6 +77,10 @@ ModbusPacket ModbusSlave::GetResponse(char *requestData)
 			break;
 		case ReadInputStatus:
 			ReadCoilStatusRegisters(StatusRegisters, startAddress, size, &response);
+			for (int i = 1; i < (response.Data[0] + 1); i++)
+			{
+				PrintBinary(response.Data[i]);
+			}
 			break;
 		case ReadHoldingRegister:
 			//responseData = Read(HOLDING_REGISTER, &request);
@@ -106,6 +110,12 @@ ModbusPacket ModbusSlave::GetResponse(char *requestData)
 	//memcpy(response.Data + RESPONSE_VALUES, response_data->data, response_data->data_size);
 	
 	return response;
+}
+
+size_t ModbusSlave::GetDataSize(ModbusPacket sendData)
+{
+	size_t size = sizeof(sendData) + sendData.Data[RESP_SIZE];
+	return size;
 }
 
 ModbusPacket ModbusSlave::ParseRequest(char* requestData)
@@ -155,13 +165,13 @@ void ModbusSlave::ReadCoilStatusRegisters(bool* registers, uint16_t address, uin
 	bool boolArray[BYTE_LENGTH];
 	bool needsPadding = false;
 	int numBytes = Utils::GetByteLengthForData(size, BITS_PER_COIL);
-	int currentByte = 0;
-	response->MessageLength = 3 + numBytes;
-	//response->MessageLength = sizeof(response->UnitId) + sizeof(response->FunctionCode) + numBytes + 1; /* 1 is the start of the data that specifies the number of data bytes retrieved*/
-	response->Data = new uint8_t[numBytes];
-	response->Data[currentByte++] = numBytes;
+	int currentByte = RESP_DATA_START;
 
-	//ResponseData *response = new ResponseData(numBytesRequested);
+	response->MessageLength = 3 + numBytes;
+	response->Data = new uint8_t[(numBytes + 1)]; // 1 is for the first part of data that tells how many data bytes follow;
+	response->Data[RESP_SIZE] = numBytes;
+	//response->MessageLength = sizeof(response->UnitId) + sizeof(response->FunctionCode) + numBytes + 1; /* 1 is the start of the data that specifies the number of data bytes retrieved*/
+
 
 	for (int i = address; i < address + size; i += BYTE_LENGTH)
 	{
@@ -190,9 +200,9 @@ void ModbusSlave::ReadCoilStatusRegisters(bool* registers, uint16_t address, uin
 
 		if (response->Data != nullptr)
 		{
-			response->Data[currentByte++] = GetByte(boolArray); //convert boolean array to a uint8_t byte
+			response->Data[currentByte] = GetByte(boolArray); //convert boolean array to a uint8_t byte
+			currentByte++;
 		}
-
 	}
 }
 

@@ -81,6 +81,8 @@ class BaseServer
 
 		bool Send(SOCKET clientSocket, T sendData);
 
+		virtual size_t GetDataSize(T sendData);
+
 		virtual T GetResponse(char* requestData);
 };
 

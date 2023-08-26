@@ -189,9 +189,6 @@ template <typename T> void BaseServer<T>::HandleClient(SOCKET socket)
 					cout << "There are " << remainingBytes << " left in the buffer" << endl;
                 }
             */
-
-
-		
 		}
 	}
 
@@ -206,7 +203,8 @@ template <typename T> T BaseServer<T>::GetResponse(char *clientRequestData)
 
 template <typename T> bool BaseServer<T>::Send(SOCKET clientSocket, T sendData)
 {
-    int bytesSent = send(clientSocket, (char*) &sendData, sizeof(sendData), 0);
+    size_t data_size = GetDataSize(sendData);
+    int bytesSent = send(clientSocket, (char*) &sendData, sizeof(data_size), 0);
 
     if (bytesSent <= SOCKET_ERROR)
     {
@@ -214,6 +212,11 @@ template <typename T> bool BaseServer<T>::Send(SOCKET clientSocket, T sendData)
     }
 
     return true;
+}
+
+template <typename T> size_t BaseServer<T>::GetDataSize(T sendData)
+{
+    return sizeof(T);
 }
 
 //explicitly inform compiler of the instantiations that will be used 

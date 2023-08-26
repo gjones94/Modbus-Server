@@ -114,27 +114,6 @@ enum ON_OFF : uint8_t
 	OFF_LO = 0x00
 };
 
-struct ResponseData
-{
-	uint8_t response_code;
-	uint8_t data_size;
-	uint8_t* data;
-
-	ResponseData() {}
-
-	ResponseData(uint8_t size)
-	{
-		response_code = 0;
-		data_size = size;
-		data = new uint8_t[size];
-	}
-
-	~ResponseData()
-	{
-		delete[] data;
-	}
-};
-
 class ModbusPacket
 {
 	public:
@@ -171,7 +150,8 @@ class ModbusPacket
 		/* Deconstructor */
 		~ModbusPacket()
 		{
-			delete[] Data;
+			cout << "Deconstructor called" << endl;
+			if(Data)
+				delete[] Data;
 		}
-
 };
