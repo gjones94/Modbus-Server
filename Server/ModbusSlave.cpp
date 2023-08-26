@@ -112,10 +112,11 @@ ModbusPacket ModbusSlave::GetResponse(char *requestData)
 	return response;
 }
 
-size_t ModbusSlave::GetDataSize(ModbusPacket sendData)
+size_t ModbusSlave::GetDataSize(const ModbusPacket& sendData)
 {
-	size_t size = sizeof(sendData) + sendData.Data[RESP_SIZE];
-	return size;
+	size_t dataSize = 11 + sendData.Data[RESP_SIZE];
+
+	return dataSize;
 }
 
 ModbusPacket ModbusSlave::ParseRequest(char* requestData)

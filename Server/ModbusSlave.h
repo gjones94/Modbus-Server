@@ -21,8 +21,6 @@ void PrintBinary(T value);
 
 uint8_t GetByte(bool* array);
 
-
-
 class ModbusSlave : public BaseServer<ModbusPacket>
 {
 	public:
@@ -46,7 +44,7 @@ class ModbusSlave : public BaseServer<ModbusPacket>
 		/* Response Methods */
 		ModbusPacket ParseRequest(char* requestData);
 		ModbusPacket GetResponse(char * requestData) override;
-		size_t GetDataSize(ModbusPacket data) override;
+		size_t GetDataSize(const ModbusPacket& data) override;
 
 		/* Read/Write Methods */
 		void ReadCoilStatusRegisters(bool* registers, uint16_t address, uint16_t size, ModbusPacket *response);

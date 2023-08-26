@@ -204,6 +204,7 @@ template <typename T> T BaseServer<T>::GetResponse(char *clientRequestData)
 template <typename T> bool BaseServer<T>::Send(SOCKET clientSocket, T sendData)
 {
     size_t data_size = GetDataSize(sendData);
+
     int bytesSent = send(clientSocket, (char*) &sendData, data_size, 0);
 
     if (bytesSent <= SOCKET_ERROR)
@@ -214,7 +215,7 @@ template <typename T> bool BaseServer<T>::Send(SOCKET clientSocket, T sendData)
     return true;
 }
 
-template <typename T> size_t BaseServer<T>::GetDataSize(T sendData)
+template <typename T> size_t BaseServer<T>::GetDataSize(const T& sendData)
 {
     return sizeof(T);
 }
