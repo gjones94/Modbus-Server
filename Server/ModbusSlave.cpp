@@ -165,11 +165,12 @@ void ModbusSlave::ReadCoilStatusRegisters(bool* registers, uint16_t address, uin
 	bool boolArray[BYTE_LENGTH];
 	bool needsPadding = false;
 	int numBytes = Utils::GetByteLengthForData(size, BITS_PER_COIL);
-	int currentByte = RESP_DATA_START;
+	int currentByte = 1;
 
+	int dataSize = numBytes + 1; // 1 is for the first part of data that tells how many data bytes follow;
 	response->MessageLength = 3 + numBytes;
-	response->Data = new uint8_t[(numBytes + 1)]; // 1 is for the first part of data that tells how many data bytes follow;
-	response->Data[RESP_SIZE] = numBytes;
+	response->Data = new uint8_t[dataSize];
+	response->Data[0] = numBytes;
 	//response->MessageLength = sizeof(response->UnitId) + sizeof(response->FunctionCode) + numBytes + 1; /* 1 is the start of the data that specifies the number of data bytes retrieved*/
 
 
