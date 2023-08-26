@@ -79,10 +79,10 @@ class BaseServer
 		/// <param name="data"></param>
 		void HandleClient(SOCKET socket);
 
-		bool Send(SOCKET clientSocket, T sendData);
+		bool Send(SOCKET clientSocket, const T& sendData);
 
 		virtual size_t GetDataSize(const T& sendData);
 
-		virtual T GetResponse(char* requestData);
+		virtual T* GetResponse(char* requestData);
 };
 

@@ -57,7 +57,7 @@ void ModbusSlave::Start()
 	3) Data Requested (Functions 1-4) // Data Value Written (Functions 5, 6) // # Written (Functions 15, 16)
 	====================================================================
 */
-ModbusPacket ModbusSlave::GetResponse(char *requestData)
+ModbusPacket* ModbusSlave::GetResponse(char *requestData)
 {
 	ModbusPacket request = ParseRequest(requestData);
 	request.PrintHeader();
@@ -73,10 +73,10 @@ ModbusPacket ModbusSlave::GetResponse(char *requestData)
 	switch (request.FunctionCode)
 	{
 		case ReadCoilStatus:
-			ReadCoilStatusRegisters(CoilRegisters, startAddress, size, &response);
+			ReadCoilStatusRegisters(CoilRegisters, startAddress, size, response);
 			break;
 		case ReadInputStatus:
-			ReadCoilStatusRegisters(StatusRegisters, startAddress, size, &response);
+			ReadCoilStatusRegisters(StatusRegisters, startAddress, size, response);
 			for (int i = 1; i < (response.Data[0] + 1); i++)
 			{
 				PrintBinary(response.Data[i]);
@@ -109,7 +109,7 @@ ModbusPacket ModbusSlave::GetResponse(char *requestData)
 	}*/
 	//memcpy(response.Data + RESPONSE_VALUES, response_data->data, response_data->data_size);
 	
-	return response;
+	return &response;
 }
 
 size_t ModbusSlave::GetDataSize(const ModbusPacket& sendData)
@@ -161,7 +161,7 @@ ModbusPacket ModbusSlave::ParseRequest(char* requestData)
 */
 
 /* TODO: Removing responseData object, and just passing the response in here as a pointer to be filled */
-void ModbusSlave::ReadCoilStatusRegisters(bool* registers, uint16_t address, uint16_t size, ModbusPacket *response)
+void ModbusSlave::ReadCoilStatusRegisters(bool* registers, uint16_t address, uint16_t size, ModbusPacket &response)
 {
 	bool boolArray[BYTE_LENGTH];
 	bool needsPadding = false;
@@ -169,9 +169,9 @@ void ModbusSlave::ReadCoilStatusRegisters(bool* registers, uint16_t address, uin
 	int currentByte = 1;
 
 	int dataSize = numBytes + 1; // 1 is for the first part of data that tells how many data bytes follow;
-	response->MessageLength = 3 + numBytes;
-	response->Data = new uint8_t[dataSize];
-	response->Data[0] = numBytes;
+	response.MessageLength = 3 + numBytes;
+	response.Data = new uint8_t[dataSize];
+	response.Data[0] = numBytes;
 	//response->MessageLength = sizeof(response->UnitId) + sizeof(response->FunctionCode) + numBytes + 1; /* 1 is the start of the data that specifies the number of data bytes retrieved*/
 
 
@@ -200,9 +200,9 @@ void ModbusSlave::ReadCoilStatusRegisters(bool* registers, uint16_t address, uin
 		//iterating through array gives us MSB. We need LSB, so we will reverse the array
 		Reverse<bool>(boolArray, BYTE_LENGTH);
 
-		if (response->Data != nullptr)
+		if (response.Data != nullptr)
 		{
-			response->Data[currentByte] = GetByte(boolArray); //convert boolean array to a uint8_t byte
+			response.Data[currentByte] = GetByte(boolArray); //convert boolean array to a uint8_t byte
 			currentByte++;
 		}
 	}

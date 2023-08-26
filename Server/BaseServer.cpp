@@ -178,9 +178,9 @@ template <typename T> void BaseServer<T>::HandleClient(SOCKET socket)
                 break;
             }
 
-            T responseData = GetResponse(recvData);
+            T* responseData = GetResponse(recvData);
 
-            success = Send(socket, responseData);
+            success = Send(socket, *responseData);
 			/*  
                 unsigned long remainingBytes = 0;
 				int result = ioctlsocket(socket, FIONREAD, &remainingBytes);
@@ -195,13 +195,12 @@ template <typename T> void BaseServer<T>::HandleClient(SOCKET socket)
     closesocket(socket);
 }
 
-template <typename T> T BaseServer<T>::GetResponse(char *clientRequestData)
+template <typename T> T* BaseServer<T>::GetResponse(char *clientRequestData)
 {
-    T response;
-    return response;
+    return nullptr;
 }
 
-template <typename T> bool BaseServer<T>::Send(SOCKET clientSocket, T sendData)
+template <typename T> bool BaseServer<T>::Send(SOCKET clientSocket, const T& sendData)
 {
     size_t data_size = GetDataSize(sendData);
 
