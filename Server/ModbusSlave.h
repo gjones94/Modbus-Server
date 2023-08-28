@@ -4,22 +4,13 @@
 #include <cmath>
 
 #define DATA_BLOCK_SIZE 4096
-#define BYTE_LENGTH 8
+#define SIZE_OF_BYTE 8
 #define BYTES_PER_REG 2
 #define BITS_PER_COIL 1
 #define BITS_PER_REG 16
 #define ERROR_FLAG 0b10000000
 
-template <typename T>
-void Reverse(T* array, int size);
 
-template <typename T>
-void PrintArray(const T* array, int size);
-
-template <typename T>
-void PrintBinary(T value);
-
-uint8_t GetByte(bool* array);
 
 class ModbusSlave : public BaseServer<ModbusPacket>
 {
@@ -42,11 +33,10 @@ class ModbusSlave : public BaseServer<ModbusPacket>
 		void EnableZeroBasedAddressing(bool enabled);
 
 		/* Response Methods */
-		ModbusPacket ParseRequest(char* requestData);
-		ModbusPacket* GetResponse(char * requestData) override;
-		size_t GetDataSize(const ModbusPacket& data) override;
+		size_t GetSendBufferSize(const ModbusPacket* sendData) override;
+		ModbusPacket GetResponse(char * requestData) override;
 
 		/* Read/Write Methods */
-		void ReadCoilStatusRegisters(bool* registers, uint16_t address, uint16_t size, ModbusPacket &response);
+		ModbusPacket ReadCoilStatusRegisters(bool* registers, const ModbusPacket& request);
 };
 

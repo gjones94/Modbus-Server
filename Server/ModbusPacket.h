@@ -41,7 +41,7 @@ enum STATUS : uint8_t
 	BAD = 0x80, /* |= sets the far left bit for error */
 };
 
-enum TCP_REQUST : int
+enum REQUEST : int
 {
 	TID_HI,
 	TID_LO,
@@ -49,35 +49,66 @@ enum TCP_REQUST : int
 	PID_LO,
 	LEN_HI,
 	LEN_LO,
-	UID,
-	FCODE,
-	ADDR_HI,
-	ADDR_LO,
-	DATA
+	UID, //included in message length count
+
+	FCODE, //included in message length count
+	DATA_START
+};
+#define BASE_MESSAGE_LENGTH 2 // UID (1 byte) + FCODE (1 byte)
+
+/* Functions (1 - 4) */
+#define RQ_READ_INFO_SZ 4
+enum RQ_READ
+{
+	RQ_ADDR_HI = 0,
+	RQ_ADDR_LO = 1,
+	RQ_SIZE_HI = 2,
+	RQ_SIZE_LO = 3
 };
 
-/* REQUESTS */
-enum REQ_TCP_READ : int
+/* (Functions 5, 6) */
+#define RQ_WRITE_SINGLE_INFO_SZ 2
+enum RQ_WRITE_SINGLE : int
 {
-	REQ_SIZE_HI = 0,
-	REQ_SIZE_LO = 1
+	RQ_WRITE_ADDR_HI = 0,
+	RQ_WRITE_ADDR_LO = 1,
+	RQ_WRITE_VALUE_HI = 2,
+	RQ_WRITE_VALUE_LO = 3
 };
 
-enum REQ_TCP_WRITE_SINGLE : int
+/* (Functions 15, 16) */
+#define RQ_WRITE_MULTIPLE_INFO_SZ 5
+enum RQ_WRITE_MULTIPLE : int
 {
-	REQ_VALUE_HI = 0,
-	REQ_VALUE_LO = 1
+	RQ_WRITES_ADDR_HI,
+	RQ_WRITES_ADDR_LO,
+	RQ_WRITES_SIZE_HI,
+	RQ_WRITES_SIZE_LO,
+	RQ_WRITE_BYTE_COUNT
 };
 
-enum REQ_TCP_WRITE_MULTIPLE : int
+#define RES_READ_INFO_SZ 1 // 1 Byte representing count of bytes in response
+enum RES_READ : int
 {
-	REQ_SIZE = 1
+	RES_READ_BYTE_COUNT = 0, //First byte indicates number of data bytes to follow
 };
 
-enum RESP_TCP_READ : int
+#define RES_WRITE_INFO_SZ 4
+enum RES_WRITE_SINGLE : int
 {
-	RESP_SIZE = 0,
-	RESP_DATA_START = 1
+	RES_WRITE_ADDR_HI = 0, //first byte indicates Hi byte of the address written to
+	RES_WRITE_ADDR_LO = 1, //second byte indiciates the Lo byte of the address written to
+	RES_WRITE_VALUE_HI = 2, //first byte indicates the Hi byte of the value written
+	RES_WRITE_VALUE_LO = 3, //second byte indicates the Lo byte of the value written
+};
+
+#define RES_WRITES_INFO_SZ 4
+enum RES_WRITE_MULTIPLE : int
+{
+	RES_WRITES_ADDR_HI = 0, //first byte indicates Hi byte of the address written to
+	RES_WRITES_ADDR_LO = 1, //second byte indiciates the Lo byte of the address written to
+	RES_WRITES_SIZE_HI = 2, //first byte indicates the Hi byte of the number of values written
+	RES_WRITES_SIZE_LO = 3 //second byte indicates the Lo byte of the number of values written
 };
 
 enum ErrorCodes : uint8_t
@@ -96,14 +127,14 @@ enum ErrorCodes : uint8_t
 
 enum FunctionCodes : uint8_t
 {
-	ReadCoilStatus = 0x01,
-	ReadInputStatus = 0x02,
-	ReadHoldingRegister = 0x03,
-	ReadInputRegister = 0x04,
-	ForceSingleCoil = 0x05,
-	PresetSingleRegister = 0x06,
-	ForceMultipleCoils = 0x0F,
-	PresetMultipleRegisters = 0x10
+	READ_COILS = 0x01,
+	READ_INPUTS = 0x02,
+	READ_HOLDING_REGISTERS = 0x03,
+	READ_INPUT_REGISTERS = 0x04,
+	WRITE_SINGLE_COIL = 0x05,
+	WRITE_SINGLE_REGISTER = 0x06,
+	WRITE_MULTIPLE_COILS = 0x0F,
+	WRITE_MULTIPLE_REGISTERS = 0x10
 };
 
 enum ON_OFF : uint8_t
@@ -117,41 +148,90 @@ enum ON_OFF : uint8_t
 class ModbusPacket
 {
 	public:
-		/* MBAP */
-		uint16_t TransactionId;
-		uint16_t ProtocolId;
-		uint16_t MessageLength;
-		uint8_t UnitId;
+		/* MBAP Header */
+		uint16_t transaction_id;
+		uint16_t protocol_id;
+		uint16_t message_length;
+		uint8_t unit_id;
 
-		/* PDU */
-		uint8_t FunctionCode;
-		uint16_t StartAddress;
-		uint8_t *Data;
+		/* PDU Data */
+		uint8_t function;
+		uint8_t *data;
 
 		/* Request Methods */
-		void FixHeaderByteOrder();
-		uint16_t GetStartAddress(bool zeroBasedAddressing);
-		uint16_t GetRequestSize();
-		uint16_t GetWriteValue();
+		void SetNetworkByteOrder();
+		void SetHostByteOrder();
+		void ParseRawRequest(const char *data);
+		uint16_t GetStartAddress(bool zeroBasedAddressing) const;
+		uint16_t GetRequestSize() const;
+		uint16_t GetMessageLength() const;
+		uint16_t GetSingleWriteValue();
 
 		/* Diagnostics */
 		void PrintHeader();
 
 		ModbusPacket() 
 		{
-			TransactionId = 0;
-			ProtocolId = 0;
-			MessageLength = 0;
-			UnitId = 0;
-			FunctionCode = 0;
-			StartAddress = 0;
+			transaction_id = 0;
+			protocol_id = 0;
+			message_length = 0;
+			unit_id = 0;
+			function = 0;
+			data = nullptr;
 		};
+
+
+		ModbusPacket(const ModbusPacket& other)
+		{
+			transaction_id = other.transaction_id;
+			protocol_id = other.protocol_id;
+			message_length = other.message_length;
+			unit_id = other.unit_id;
+			function = other.function;
+			int data_size = message_length - BASE_MESSAGE_LENGTH;
+			data = new uint8_t[data_size];
+			for (int i = 0; i < data_size; i++)
+			{
+				data[i] = other.data[i];
+			}
+		}
+
+		ModbusPacket& operator=(const ModbusPacket& other)
+		{
+			if (this != &other)
+			{
+				delete[] data;
+
+				transaction_id = other.transaction_id;
+				protocol_id = other.protocol_id;
+				message_length = other.message_length;
+				unit_id = other.unit_id;
+				function = other.function;
+				int data_size = message_length - BASE_MESSAGE_LENGTH;
+				data = new uint8_t[data_size];
+				for (int i = 0; i < data_size; i++)
+				{
+					data[i] = other.data[i];
+				}
+			}
+
+			return *this;
+		}
+
+		operator char* ()
+		{
+			cout << "Serialize called" << endl;
+			int base = sizeof(ModbusPacket);
+			int data = message_length - BASE_MESSAGE_LENGTH;
+			char* packet = new char[base + data];
+			memcpy(packet, this, base + data);
+			return packet;
+		}
 
 		/* Deconstructor */
 		~ModbusPacket()
 		{
-			cout << "Deconstructor called" << endl;
-			if(Data)
-				delete[] Data;
+			if(data)
+				delete[] data;
 		}
 };

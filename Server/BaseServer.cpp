@@ -1,5 +1,6 @@
 #include "BaseServer.h"
 #include "ModbusPacket.h"
+#include "Utils.h"
 
 using namespace std;
 
@@ -178,33 +179,26 @@ template <typename T> void BaseServer<T>::HandleClient(SOCKET socket)
                 break;
             }
 
-            T* responseData = GetResponse(recvData);
+            T responseData = GetResponse(recvData);
 
-            success = Send(socket, *responseData);
-			/*  
-                unsigned long remainingBytes = 0;
-				int result = ioctlsocket(socket, FIONREAD, &remainingBytes);
-				if (result == 0)
-				{
-					cout << "There are " << remainingBytes << " left in the buffer" << endl;
-                }
-            */
+            success = Send(socket, &responseData);
 		}
 	}
 
     closesocket(socket);
 }
 
-template <typename T> T* BaseServer<T>::GetResponse(char *clientRequestData)
+template <typename T> T BaseServer<T>::GetResponse(char *clientRequestData)
 {
-    return nullptr;
+    T response;
+    return response;
 }
 
-template <typename T> bool BaseServer<T>::Send(SOCKET clientSocket, const T& sendData)
+template <typename T> bool BaseServer<T>::Send(SOCKET clientSocket, const T* sendData)
 {
-    size_t data_size = GetDataSize(sendData);
-
-    int bytesSent = send(clientSocket, (char*) &sendData, data_size, 0);
+    size_t data_size = GetSendBufferSize(sendData);
+    char* packet = (char*) sendData;
+    int bytesSent = send(clientSocket, (char*) sendData, data_size, 0);
 
     if (bytesSent <= SOCKET_ERROR)
     {
@@ -214,7 +208,7 @@ template <typename T> bool BaseServer<T>::Send(SOCKET clientSocket, const T& sen
     return true;
 }
 
-template <typename T> size_t BaseServer<T>::GetDataSize(const T& sendData)
+template <typename T> size_t BaseServer<T>::GetSendBufferSize(const T* sendData)
 {
     return sizeof(T);
 }

@@ -41,7 +41,6 @@ void ModbusSlave::InitializeMemory()
 	StatusRegisters[17] = true;
 	StatusRegisters[18] = true;
 	StatusRegisters[19] = false;
-
 }
 
 void ModbusSlave::Start()
@@ -57,85 +56,60 @@ void ModbusSlave::Start()
 	3) Data Requested (Functions 1-4) // Data Value Written (Functions 5, 6) // # Written (Functions 15, 16)
 	====================================================================
 */
-ModbusPacket* ModbusSlave::GetResponse(char *requestData)
+ModbusPacket ModbusSlave::GetResponse(char *requestData)
 {
-	ModbusPacket request = ParseRequest(requestData);
-	request.PrintHeader();
-	uint16_t startAddress = request.StartAddress;
-	uint16_t size = request.GetRequestSize();
+	ModbusPacket request;
+	request.ParseRawRequest(requestData);
 
 	ModbusPacket response;
-	response.TransactionId = htons(request.TransactionId);
-	response.ProtocolId = htons(request.ProtocolId);
-	response.UnitId = request.UnitId;
-	response.FunctionCode = request.FunctionCode;
 
-	switch (request.FunctionCode)
+	switch (request.function)
 	{
-		case ReadCoilStatus:
-			ReadCoilStatusRegisters(CoilRegisters, startAddress, size, response);
+		case READ_COILS:
+			response = ReadCoilStatusRegisters(CoilRegisters, request);
 			break;
-		case ReadInputStatus:
-			ReadCoilStatusRegisters(StatusRegisters, startAddress, size, response);
-			for (int i = 1; i < (response.Data[0] + 1); i++)
-			{
-				PrintBinary(response.Data[i]);
-			}
+		case READ_INPUTS:
+			response = ReadCoilStatusRegisters(StatusRegisters, request);
 			break;
-		case ReadHoldingRegister:
+		case READ_HOLDING_REGISTERS:
 			//responseData = Read(HOLDING_REGISTER, &request);
 			break;
-		case ReadInputRegister:
+		case READ_INPUT_REGISTERS:
 			//responseData = Read(INPUT_REGISTER, &request);
 			break;
-		case ForceSingleCoil:
+		case WRITE_SINGLE_COIL:
 			break;
-		case PresetSingleRegister:
+		case WRITE_SINGLE_REGISTER:
 			break;
-		case ForceMultipleCoils:
+		case WRITE_MULTIPLE_COILS:
 			break;
-		case PresetMultipleRegisters:
+		case WRITE_MULTIPLE_REGISTERS:
 			break;
 	}
 
-	response.MessageLength = htons(response.MessageLength);
-	/*response.Data[RESP_SIZE] = response_data->data_size;
+	response.transaction_id = htons(request.transaction_id);
+	response.protocol_id = htons(request.protocol_id);
+	response.unit_id = request.unit_id;
+	response.function = request.function;
 
-	PrintBinary(response.Data[0]);
-	for (int i = RESP_DATA_START; i < (response_data->data_size + RESP_DATA_START); i++)
+	for (int i = 0; i < response.message_length - 2; i++)
 	{
-		response.Data[i] = response_data->data[i - 1];
-		PrintBinary(response.Data[i]);
-	}*/
-	//memcpy(response.Data + RESPONSE_VALUES, response_data->data, response_data->data_size);
+		Utils::PrintBinary<uint8_t>(response.data[i]);
+	}
+
+	response.message_length = htons(response.message_length);
 	
-	return &response;
+	return response;
 }
 
-size_t ModbusSlave::GetDataSize(const ModbusPacket& sendData)
+size_t ModbusSlave::GetSendBufferSize(const ModbusPacket* sendData)
 {
-	size_t dataSize = 11 + sendData.Data[RESP_SIZE];
+	size_t t_size = sizeof(sendData->transaction_id);
+	size_t p_size = sizeof(sendData->protocol_id);
+	size_t l_size = sizeof(sendData->message_length);
+	size_t m_size = ntohs(sendData->message_length);
 
-	return dataSize;
-}
-
-ModbusPacket ModbusSlave::ParseRequest(char* requestData)
-{
-	ModbusPacket request;
-	request.TransactionId = ntohs(MAKEWORD(requestData[TID_HI], requestData[TID_LO]));
-	request.ProtocolId = ntohs(MAKEWORD(requestData[PID_HI], requestData[PID_LO]));
-	request.MessageLength = ntohs(MAKEWORD(requestData[LEN_HI], requestData[LEN_LO]));
-	request.UnitId = requestData[UID];
-	request.FunctionCode = requestData[FCODE];
-	request.StartAddress = ntohs(MAKEWORD(requestData[ADDR_HI], requestData[ADDR_LO]));
-
-	int requestDataLength = request.MessageLength - sizeof(request.UnitId) - sizeof(request.FunctionCode) - sizeof(request.StartAddress);
-	
-	request.Data = new uint8_t[requestDataLength];
-
-	memcpy(request.Data, (requestData + DATA), requestDataLength);
-
-	return request;
+	return t_size + p_size + l_size + m_size;
 }
 
 /*
@@ -160,144 +134,63 @@ ModbusPacket ModbusSlave::ParseRequest(char* requestData)
 	====================================================================
 */
 
-/* TODO: Removing responseData object, and just passing the response in here as a pointer to be filled */
-void ModbusSlave::ReadCoilStatusRegisters(bool* registers, uint16_t address, uint16_t size, ModbusPacket &response)
+ModbusPacket ModbusSlave::ReadCoilStatusRegisters(bool* registers, const ModbusPacket& request)
 {
-	bool boolArray[BYTE_LENGTH];
+
+	int start_address = request.GetStartAddress(ZeroBasedAddressing);
+	int request_size = request.GetRequestSize(); 
+
+	ModbusPacket response;
+
+	int byte_count = Utils::NumBytesNeeded(request_size, BITS_PER_COIL);
+
+	int data_block_size = RES_READ_INFO_SZ + byte_count;
+	response.data = new uint8_t[data_block_size];
+	response.data[RES_READ_BYTE_COUNT] = byte_count;
+	response.message_length = BASE_MESSAGE_LENGTH + data_block_size;
+
+	bool boolArray[SIZE_OF_BYTE];
 	bool needsPadding = false;
-	int numBytes = Utils::GetByteLengthForData(size, BITS_PER_COIL);
-	int currentByte = 1;
+	int current_byte = 1;
+	int end_address = start_address + request_size;
 
-	int dataSize = numBytes + 1; // 1 is for the first part of data that tells how many data bytes follow;
-	response.MessageLength = 3 + numBytes;
-	response.Data = new uint8_t[dataSize];
-	response.Data[0] = numBytes;
-	//response->MessageLength = sizeof(response->UnitId) + sizeof(response->FunctionCode) + numBytes + 1; /* 1 is the start of the data that specifies the number of data bytes retrieved*/
-
-
-	for (int i = address; i < address + size; i += BYTE_LENGTH)
+	for (int i = start_address; i < end_address; i += SIZE_OF_BYTE)
 	{
-		int numberOfValues = BYTE_LENGTH;
+		int numberOfValues = SIZE_OF_BYTE;
 
 		//if next coil block exceeds total size requested, minimize acquisition to the request size
-		if ((i + BYTE_LENGTH) > size)
+		if ((i + SIZE_OF_BYTE) > end_address)
 		{
-			numberOfValues = size - i;
+			numberOfValues = end_address - i;
 			needsPadding = true;
 		}
 
 		//store the values from this register block
 		memcpy(boolArray, registers + i, numberOfValues);
 
+		//add 0/false padding to remainder of byte if needed
 		if (needsPadding)
 		{
-			for (int j = numberOfValues; j < BYTE_LENGTH; j++)
+			for (int j = numberOfValues; j < SIZE_OF_BYTE; j++)
 			{
 				boolArray[j] = false;
 			}
 		}
 
 		//iterating through array gives us MSB. We need LSB, so we will reverse the array
-		Reverse<bool>(boolArray, BYTE_LENGTH);
+		Utils::Reverse<bool>(boolArray, SIZE_OF_BYTE);
 
-		if (response.Data != nullptr)
+		if (response.data != nullptr)
 		{
-			response.Data[currentByte] = GetByte(boolArray); //convert boolean array to a uint8_t byte
-			currentByte++;
+			response.data[current_byte] = Utils::GetByte(boolArray); 
+			current_byte++;
 		}
 	}
+
+	return response;
 }
 
 void ModbusSlave::EnableZeroBasedAddressing(bool enabled)
 {
 	ZeroBasedAddressing = enabled;
 }
-
-/*
-	Reverse: Reverse the the order of elements in an array
-	====================================================================
-	Algorithm
-	swapping values beginning and end values until we reach halfway point
-	i-> 	<-j
-	1 2 3 4 5 6
-	====================================================================
-*/
-template <typename T>
-void Reverse(T* array, int size)
-{
-
-	for (int i = 0; i < (size / 2); i++)
-	{
-		int j = size - i - 1;
-		T swap = array[j];
-		array[j] = array[i];
-		array[i] = swap;
-	}
-}
-
-
-/*
-	GetByte
-	====================================================================
-	Algorithm
-	[F] T T T F T -> (array), start index 0
-	 1  0 0 0 0 0 -> IF (array[index] = True)  { OR with 1 bit on far left }
-	 0  1 0 0 0 0 -> IF (array[index] = True)  { OR with 1 bit on end shifted right by index count }
-	 0  0 1 0 0 0 -> IF (array[index] = True)  { OR with 1 bit on end shifted right by index count }
-	 ------------
-	 0  1 1 1 0 1 RESULTING BINARY
-	====================================================================
-*/
-uint8_t GetByte(bool* array)
-{
-	uint8_t byte = 0;
-
-	int farLeftBit = 1 << (BYTE_LENGTH - 1);
-
-	for (int i = 0; i < BYTE_LENGTH; i++) //move right
-	{
-		if (array[i] == true)
-		{
-			byte |= (farLeftBit >> i); //shift right
-		}
-	}
-
-	return byte;
-}
-
-template<typename T>
-void PrintArray(const T* array, int size)
-{
-	cout << endl;
-	cout << "Array Values";
-	cout << "====================================================================" << endl;
-	for (int i = 0; i < size; i++)
-	{
-		cout << "i: " << i << " value: " << (T)array[i] << endl;
-	}
-	cout << "====================================================================" << endl;
-	cout << endl;
-}
-
-template <typename T>
-void PrintBinary(T value)
-{
-	cout << endl;
-	cout << "Binary" << endl;
-	cout << "====================================================================" << endl;
-	int dataSize = (sizeof(T) * BYTE_LENGTH);
-	for (int i = 1 << (dataSize - 1); i > 0; i >>= 1)
-	{
-		if (i & value)
-		{
-			printf("1");
-		}
-		else
-		{
-			printf("0");
-		}
-	}
-	printf("\n");
-	cout << "====================================================================" << endl;
-}
-
