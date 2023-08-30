@@ -218,16 +218,6 @@ class ModbusPacket
 			return *this;
 		}
 
-		operator char* ()
-		{
-			cout << "Serialize called" << endl;
-			int base = sizeof(ModbusPacket);
-			int data = message_length - BASE_MESSAGE_LENGTH;
-			char* packet = new char[base + data];
-			memcpy(packet, this, base + data);
-			return packet;
-		}
-
 		/* Deconstructor */
 		~ModbusPacket()
 		{

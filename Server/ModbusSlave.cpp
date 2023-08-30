@@ -102,6 +102,10 @@ ModbusPacket ModbusSlave::GetResponse(char *requestData)
 	return response;
 }
 
+bool ModbusSlave::Send(SOCKET socket, const ModbusPacket* sendData)
+{
+}
+
 size_t ModbusSlave::GetSendBufferSize(const ModbusPacket* sendData)
 {
 	size_t t_size = sizeof(sendData->transaction_id);
@@ -133,7 +137,6 @@ size_t ModbusSlave::GetSendBufferSize(const ModbusPacket* sendData)
 		 will be padded with zeros
 	====================================================================
 */
-
 ModbusPacket ModbusSlave::ReadCoilStatusRegisters(bool* registers, const ModbusPacket& request)
 {
 

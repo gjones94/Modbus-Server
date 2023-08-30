@@ -33,10 +33,13 @@ class ModbusSlave : public BaseServer<ModbusPacket>
 		void EnableZeroBasedAddressing(bool enabled);
 
 		/* Response Methods */
-		size_t GetSendBufferSize(const ModbusPacket* sendData) override;
-		ModbusPacket GetResponse(char * requestData) override;
+		size_t GetSendBufferSize(const ModbusPacket* sendData);
 
 		/* Read/Write Methods */
 		ModbusPacket ReadCoilStatusRegisters(bool* registers, const ModbusPacket& request);
+		
+		/* Base Server override */
+		ModbusPacket GetResponse(char * requestData) override;
+		bool Send(SOCKET clientSocket, const ModbusPacket* sendData) override;
 };
 

@@ -79,9 +79,13 @@ class BaseServer
 		/// <param name="data"></param>
 		void HandleClient(SOCKET socket);
 
-		bool Send(SOCKET clientSocket, const T* sendData);
-
-		virtual size_t GetSendBufferSize(const T* sendData);
+		/// <summary>
+		/// Sends data through the established client socket
+		/// </summary>
+		/// <param name="clientSocket"></param>
+		/// <param name="sendData"></param>
+		/// <returns></returns>
+		virtual bool Send(SOCKET clientSocket, const T* sendData);
 
 		virtual T GetResponse(char* requestData);
 };

@@ -196,9 +196,7 @@ template <typename T> T BaseServer<T>::GetResponse(char *clientRequestData)
 
 template <typename T> bool BaseServer<T>::Send(SOCKET clientSocket, const T* sendData)
 {
-    size_t data_size = GetSendBufferSize(sendData);
-    char* packet = (char*) sendData;
-    int bytesSent = send(clientSocket, (char*) sendData, data_size, 0);
+    int bytesSent = send(clientSocket, (char*) sendData, sizeof(T), 0);
 
     if (bytesSent <= SOCKET_ERROR)
     {
@@ -206,11 +204,6 @@ template <typename T> bool BaseServer<T>::Send(SOCKET clientSocket, const T* sen
     }
 
     return true;
-}
-
-template <typename T> size_t BaseServer<T>::GetSendBufferSize(const T* sendData)
-{
-    return sizeof(T);
 }
 
 //explicitly inform compiler of the instantiations that will be used 
