@@ -1,3 +1,4 @@
+
 #include "ModbusPacket.h"
 
 void ModbusPacket::SetNetworkByteOrder()
@@ -5,6 +6,8 @@ void ModbusPacket::SetNetworkByteOrder()
 	transaction_id = ntohs(transaction_id);
 	protocol_id = ntohs(protocol_id);
 	message_length = ntohs(message_length);
+
+	byte_format = LSB;
 }
 
 void ModbusPacket::SetHostByteOrder()
@@ -12,6 +15,8 @@ void ModbusPacket::SetHostByteOrder()
 	transaction_id = htons(transaction_id);
 	protocol_id = htons(protocol_id);
 	message_length = htons(message_length);
+
+	byte_format = MSB;
 }
 
 void ModbusPacket::ParseRawRequest(const char* requestData)
@@ -27,6 +32,8 @@ void ModbusPacket::ParseRawRequest(const char* requestData)
 	int data_size = message_length - BASE_MESSAGE_LENGTH;
 	data = new uint8_t[data_size];
 	memcpy(data, requestData + DATA_START, data_size);
+
+	byte_format = LSB;
 }
 
 uint16_t ModbusPacket::GetStartAddress(bool zeroBasedAddressing) const
@@ -60,6 +67,69 @@ uint16_t ModbusPacket::GetSingleWriteValue()
 
 	return value;
 }
+ 
+char* ModbusPacket::Serialize(const ModbusPacket* packet)
+{
+	//TODO, test and make sure that endianess was maintained upon return
+	size_t data_size = ntohs(packet->message_length) - BASE_MESSAGE_LENGTH;
+
+	char* data = new char[HEADER_LENGTH + data_size];
+
+	if (data != nullptr)
+	{
+		memcpy(data, packet, HEADER_LENGTH);
+		memcpy(data + DATA_START, packet->data, data_size);
+
+		packet->PrintPacketBinary();
+
+	/*	cout << endl;
+		cout << "TID" << endl;
+		Utils::PrintBinary(data[0]);
+		cout << " ";
+		Utils::PrintBinary(data[1]);
+
+		cout << endl;
+		cout << endl;
+
+		cout << "PID" << endl;
+		Utils::PrintBinary(data[2]);
+		cout << " ";
+		Utils::PrintBinary(data[3]);
+
+		cout << endl;
+		cout << endl;
+
+		cout << "Message Length" << endl;
+		Utils::PrintBinary(data[4]);
+		cout << " ";
+		Utils::PrintBinary(data[5]);
+
+		cout << endl;
+		cout << endl;
+
+		cout << "UID: " << endl;
+		Utils::PrintBinary(data[6]);
+
+		cout << endl;
+		cout << endl;
+
+		cout << "Function Code:" << endl;
+		Utils::PrintBinary(data[7]);
+		cout << endl;
+		cout << endl;
+
+		cout << "Data" << endl;
+		for (int i = DATA_START; i < (HEADER_LENGTH + data_size); i++)
+		{
+			Utils::PrintBinary(data[i]);
+			cout << " ";
+		}
+		cout << endl;*/
+
+	}
+
+	return (char*) data;
+}
 
 void ModbusPacket::PrintHeader()
 {
@@ -72,4 +142,49 @@ void ModbusPacket::PrintHeader()
 	cout << "=================================" << endl;
 	cout << endl;
 }
+
+void ModbusPacket::PrintPacketBinary() const
+{
+	cout << "============PACKET DATA============" << endl;
+	cout << endl;
+	cout << "TID" << endl;
+	Utils::PrintBinary(transaction_id);
+
+	cout << endl;
+	cout << endl;
+
+	cout << "PID" << endl;
+	Utils::PrintBinary(protocol_id);
+
+	cout << endl;
+	cout << endl;
+
+	cout << "Message Length" << endl;
+	Utils::PrintBinary(message_length);
+
+	cout << endl;
+	cout << endl;
+
+	cout << "UID: " << endl;
+	Utils::PrintBinary(unit_id);
+
+	cout << endl;
+	cout << endl;
+
+	cout << "Function Code:" << endl;
+	Utils::PrintBinary(function);
+	cout << endl;
+	cout << endl;
+
+	cout << "Data" << endl;
+	int data_size = ntohs(message_length) - BASE_MESSAGE_LENGTH;
+	for (int i = 0; i < data_size; i++)
+	{
+		Utils::PrintBinary(data[i]);
+		cout << " ";
+	}
+	cout << endl;
+	cout << endl << "===================================" << endl;
+}
+
 

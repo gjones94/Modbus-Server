@@ -92,10 +92,10 @@ ModbusPacket ModbusSlave::GetResponse(char *requestData)
 	response.unit_id = request.unit_id;
 	response.function = request.function;
 
-	for (int i = 0; i < response.message_length - 2; i++)
-	{
-		Utils::PrintBinary<uint8_t>(response.data[i]);
-	}
+	//for (int i = 0; i < response.message_length - 2; i++)
+	//{
+	//	Utils::PrintBinary<uint8_t>(response.data[i]);
+	//}
 
 	response.message_length = htons(response.message_length);
 	
@@ -104,6 +104,9 @@ ModbusPacket ModbusSlave::GetResponse(char *requestData)
 
 bool ModbusSlave::Send(SOCKET socket, const ModbusPacket* sendData)
 {
+	char* serializedData = ModbusPacket::Serialize(sendData);
+
+	return true;
 }
 
 size_t ModbusSlave::GetSendBufferSize(const ModbusPacket* sendData)

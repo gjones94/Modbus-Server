@@ -2,6 +2,7 @@
 #include <cstdint> // For datatypes
 #include <iostream>
 #include <winsock2.h>
+#include "Utils.h"
 
 using namespace std;
 
@@ -41,6 +42,7 @@ enum STATUS : uint8_t
 	BAD = 0x80, /* |= sets the far left bit for error */
 };
 
+#define HEADER_LENGTH 8
 enum REQUEST : int
 {
 	TID_HI,
@@ -50,8 +52,8 @@ enum REQUEST : int
 	LEN_HI,
 	LEN_LO,
 	UID, //included in message length count
-
 	FCODE, //included in message length count
+
 	DATA_START
 };
 #define BASE_MESSAGE_LENGTH 2 // UID (1 byte) + FCODE (1 byte)
@@ -145,6 +147,12 @@ enum ON_OFF : uint8_t
 	OFF_LO = 0x00
 };
 
+enum ENDIAN : uint8_t
+{
+	MSB,
+	LSB
+};
+
 class ModbusPacket
 {
 	public:
@@ -166,9 +174,12 @@ class ModbusPacket
 		uint16_t GetRequestSize() const;
 		uint16_t GetMessageLength() const;
 		uint16_t GetSingleWriteValue();
+		static char* Serialize(const ModbusPacket* data);
+
 
 		/* Diagnostics */
 		void PrintHeader();
+		void PrintPacketBinary() const;
 
 		ModbusPacket() 
 		{
@@ -224,4 +235,8 @@ class ModbusPacket
 			if(data)
 				delete[] data;
 		}
+
+	private:
+		/* Tracking Endianess */
+		ENDIAN byte_format;
 };

@@ -61,9 +61,6 @@ void Utils::PrintArray(const T* array, int size)
 template <typename T>
 void Utils::PrintBinary(T value)
 {
-	cout << endl;
-	cout << "Binary" << endl;
-	cout << "====================================================================" << endl;
 	int dataSize = (sizeof(T) * SIZE_OF_BYTE);
 	for (int i = 1 << (dataSize - 1); i > 0; i >>= 1)
 	{
@@ -76,8 +73,6 @@ void Utils::PrintBinary(T value)
 			printf("0");
 		}
 	}
-	printf("\n");
-	cout << "====================================================================" << endl;
 }
 
 /*
@@ -103,4 +98,6 @@ void Utils::Reverse(T* array, int size)
 
 // Explicitly instantiate the Reverse<bool> function specialization
 template void Utils::PrintBinary<uint8_t>(uint8_t);
+template void Utils::PrintBinary<uint16_t>(uint16_t);
+template void Utils::PrintBinary<char>(char);
 template void Utils::Reverse<bool>(bool* array, int size);
