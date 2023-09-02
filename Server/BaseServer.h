@@ -52,7 +52,7 @@ typedef struct ClientConnectionHandler
 	thread *client_thread;
 	ClientConnection* client_connection;
 
-	ClientConnectionHandler(thread* thread, ClientConnection *connection) : client_thread(thread), client_connection(connection)  {}
+	ClientConnectionHandler(ClientConnection* connection, thread *thread) : client_connection(connection), client_thread(thread) {}
 
 	~ClientConnectionHandler()
 	{
@@ -105,6 +105,8 @@ class BaseServer
 		/// <param name="socket"></param>
 		/// <returns></returns>
 		virtual bool ReceiveAndRespond(SOCKET socket);
+
+		virtual void PrintClientCount();
 
 		//bool Send(SOCKET clientSocket, T sendData);
 

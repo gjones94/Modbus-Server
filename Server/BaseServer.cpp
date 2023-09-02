@@ -80,6 +80,8 @@ template <typename T> bool BaseServer<T>::BindSocket()
 
 template <typename T> void BaseServer<T>::Listen()
 {
+    u_long mode = 1; //non blocking
+    ioctlsocket(server_socket, FIONBIO, &mode);
     int result = listen(server_socket, SOMAXCONN);
 
     if (result == SOCKET_ERROR)
@@ -99,55 +101,60 @@ template <typename T> void BaseServer<T>::Listen()
 
         SOCKET clientSocket = accept(server_socket, (SOCKADDR*) &clientAddress, &szClientAddress);
 
-
-        if (clientSocket == INVALID_SOCKET)
+        if (clientSocket != SOCKET_ERROR)
         {
-            cout << "Failed to accept client request" << endl;
-            cout << "Error: " << WSAGetLastError() << endl;
-            closesocket(server_socket);
-            WSACleanup();
-            ExitProcess(EXIT_FAILURE);
+			if (thread_count < MAX_CLIENTS)
+			{
+				/*
+					Start new client communication on separate thread
+					---------------------------------------------------
+					Since this is a member function that we are spinning off in a 
+					thread, we have to use & and this in the thread call
+					otherwise, we could just do: thread(HandleClient, clientSocket)
+				*/
+
+                /* 
+					NOTE: We must use pointers for the client_connection and client_thread. If we don't, 
+                    the local variables will be destroyed and invalidate the references we passed to the connection handler
+                */
+				ClientConnection* client_connection = new ClientConnection(clientSocket, clientAddress);
+				thread *client_thread = new thread(&BaseServer::HandleClient, this, client_connection);
+
+				client_connection_handlers.push_back(new ClientConnectionHandler(client_connection, client_thread));
+                thread_count++;
+
+                PrintClientCount();
+			}
+			else 
+			{
+				cout << "\nCONNECTION ERROR: Max clients exceeded. Closing last attempted connection...\n";
+				closesocket(clientSocket);
+			}
         }
 
-        if (thread_count < MAX_CLIENTS)
+        for (vector<ClientConnectionHandler*>::iterator handler = client_connection_handlers.begin(); handler != client_connection_handlers.end();)
         {
-            /*
-				Start new client communication on separate thread
-                ---------------------------------------------------
-                Since this is a member function that we are spinning off in a 
-                thread, we have to use & and this in the thread call
-                otherwise, we could just do: thread(HandleClient, clientSocket)
-            */
-
-            ClientConnection* client_connection = new ClientConnection(clientSocket, clientAddress);
-			thread *client_thread = new thread(&BaseServer::HandleClient, this, client_connection);
-
-            ClientConnectionHandler *client_connection_handler = new ClientConnectionHandler(client_thread, client_connection);
-            client_connection_handlers.push_back(client_connection_handler);
-
-            thread_count++;
-            cout << "Clients connected: " << thread_count << endl;
-        }
-        else 
-        {
-            cout << "\nCONNECTION ERROR: Max clients exceeded. Closing last attempted connection...\n";
-            closesocket(clientSocket);
-        }
-
-        /*
-        for (vector<thread>::iterator currentThread = client_connections.begin(); currentThread != client_connections.end(); currentThread++)
-        {
-            bool threadIsFinished = currentThread->joinable();
-            if (threadIsFinished)
+            bool finished = (*handler)->client_connection->is_finished;
+            if (finished)
             {
-                currentThread->join();
-                thread_count--;
+                bool joinable = (*handler)->client_thread->joinable();
+				(*handler)->client_thread->join();
 
+                thread_count--;
                 cout << "Client closed the connection" << endl;
-                cout << "Client count: " << thread_count << endl;
+                PrintClientCount();
+
+                //get the next valid iterator after removing from the list
+                handler = client_connection_handlers.erase(handler);
+            }
+            else 
+            {
+                //otherwise go to next iterator
+                handler++;
             }
         }
-        */
+
+        this_thread::sleep_for(chrono::milliseconds(100));
     }
 
     closesocket(server_socket);
@@ -195,8 +202,6 @@ template <typename T> void BaseServer<T>::HandleClient(ClientConnection *connect
 
     connection->is_finished = true;
 	closesocket(connection->client_socket);
-
-    cout << "\nDISCONNECTED: Client #" << "1" << "\n";
 }
 
 template <typename T> bool BaseServer<T>::ReceiveAndRespond(SOCKET socket)
@@ -225,6 +230,15 @@ template <typename T> bool BaseServer<T>::ReceiveAndRespond(SOCKET socket)
     cout << "\n\n";
 
     return true;
+}
+
+template <typename T> void BaseServer<T>::PrintClientCount()
+{
+    cout << endl;
+    cout << "====================================" << endl;
+    cout << "Active Clients: " << thread_count << endl;
+    cout << "====================================" << endl;
+    cout << endl;
 }
 
 //explicitly inform compiler of the instantiations that will be used 
