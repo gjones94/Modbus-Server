@@ -8,6 +8,7 @@
 #include <stdlib.h>
 #include <iostream>
 #include <vector>
+#include <thread>
 #include <csignal>
 #include <mutex>
 #include <Windows.h>
@@ -27,13 +28,38 @@ using namespace std;
 
 const char CLIENT_DISCONNECT[] = "Exit";
 
-typedef struct ClientConnectionData
+typedef struct ClientConnection
 {
-	int threadId;
-	SOCKET clientSocket;
-	sockaddr_in clientAddress;
+	SOCKET client_socket;
+	sockaddr_in client_address;
+	bool is_finished;
+	mutex finish_lock;
 
-} ClientConnectionData;
+	ClientConnection(SOCKET socket, sockaddr_in address) : client_socket(socket), client_address(address) 
+	{
+		is_finished = false;
+	}
+
+	~ClientConnection()
+	{
+		cout << "Client Connection Deconstructed" << endl;
+	}
+
+} ClientConnection;
+
+typedef struct ClientConnectionHandler
+{
+	thread *client_thread;
+	ClientConnection* client_connection;
+
+	ClientConnectionHandler(thread* thread, ClientConnection *connection) : client_thread(thread), client_connection(connection)  {}
+
+	~ClientConnectionHandler()
+	{
+		cout << "Client handler deconstructed!" << endl;
+	}
+
+} ClientConnectionHandler;
 
 template <typename T>
 class BaseServer
@@ -43,20 +69,12 @@ class BaseServer
 	 	void Start();
 
 	private:
-		WSAData WSAData;
-		WORD Version;
-		SOCKET ServerSocket;
-		unsigned short Port;
-
-		/// <summary>
-		/// ClientId, Socket, IP address
-		/// </summary>
-		ClientConnectionData ClientData;
-
-		/// <summary>
-		/// Keeps track of the number of active clients
-		/// </summary>
-		atomic<int> ClientCount;
+		WSAData wsa_data;
+		WORD version;
+		SOCKET server_socket;
+		unsigned short port;
+		unsigned short thread_count;
+		vector<ClientConnectionHandler*> client_connection_handlers;
 
 		/// <summary>
 		/// Initializes socket using WSAData
@@ -79,7 +97,7 @@ class BaseServer
 		/// Client communication handler that runs on a separate thread
 		/// </summary>
 		/// <param name="data"></param>
-		void HandleClient(ClientConnectionData data);
+		void HandleClient(ClientConnection *data);
 		
 		/// <summary>
 		/// Receive request and send response

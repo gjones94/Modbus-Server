@@ -2,15 +2,12 @@
 
 using namespace std;
 
-
 template <typename T> BaseServer<T>::BaseServer()
 {
-    Port = PORT;
-    ClientCount = 0;
-    ServerSocket = INVALID_SOCKET;
-    Version = MAKEWORD(0, 0);
+    port = PORT;
+    server_socket = INVALID_SOCKET;
+    version = MAKEWORD(0, 0);
 };
-
 
 template <typename T> void BaseServer<T>::Start()
 {
@@ -35,23 +32,23 @@ template <typename T> bool BaseServer<T>::InitializeSocket()
 		MAKEWORD takes two bytes, and smashes them to create a 16 bit word
 		(In this case 0x0202)
 	*/
-    Version = MAKEWORD(2, 2);
-    int result = WSAStartup(Version, &WSAData);
+    version = MAKEWORD(2, 2);
+    int result = WSAStartup(version, &wsa_data);
 
     if (result != 0)
     {
         cout << "WSA Startup failed\n";
-        cout << "WSA Status: " << WSAData.szSystemStatus << endl;
+        cout << "WSA Status: " << wsa_data.szSystemStatus << endl;
         return false;
     }
 
-    ServerSocket = socket(AF_INET, SOCK_STREAM, 0);
+    server_socket = socket(AF_INET, SOCK_STREAM, 0);
 
-    if (ServerSocket == INVALID_SOCKET)
+    if (server_socket == INVALID_SOCKET)
     {
         cout << "Socket initialization failed" << endl;
         cout << "Error: " << WSAGetLastError() << endl;
-        closesocket(ServerSocket);
+        closesocket(server_socket);
         WSACleanup();
         return false;
     }
@@ -65,14 +62,14 @@ template <typename T> bool BaseServer<T>::BindSocket()
     sockaddr_in serverIPAddress;
     serverIPAddress.sin_family = AF_INET;
     serverIPAddress.sin_addr.s_addr = INADDR_ANY; //Allows connection on EVERY network interface with IP address
-    serverIPAddress.sin_port = htons(Port);
+    serverIPAddress.sin_port = htons(port);
 
-    int result = bind(ServerSocket, (SOCKADDR*) &serverIPAddress, sizeof(serverIPAddress));
+    int result = bind(server_socket, (SOCKADDR*) &serverIPAddress, sizeof(serverIPAddress));
     if (result == SOCKET_ERROR)
     {
         cout << "Failed to bind socket to IP" << endl;
         cout << "Error: " << WSAGetLastError() << endl;
-        closesocket(ServerSocket);
+        closesocket(server_socket);
         WSACleanup();
         return false;
     }
@@ -83,36 +80,36 @@ template <typename T> bool BaseServer<T>::BindSocket()
 
 template <typename T> void BaseServer<T>::Listen()
 {
-    int result = listen(ServerSocket, SOMAXCONN);
+    int result = listen(server_socket, SOMAXCONN);
 
     if (result == SOCKET_ERROR)
     {
         cout << "Failed to enable listening on socket" << endl;
-        closesocket(ServerSocket);
+        closesocket(server_socket);
         WSACleanup();
         return;
     }
 
-	cout << "Listening for incoming connections on port " << Port << " ..." << endl;
+	cout << "Listening for incoming connections on port " << port << " ..." << endl;
 
     while (true)
     {
         sockaddr_in clientAddress;
         int szClientAddress = sizeof(clientAddress);
 
-        SOCKET clientSocket = accept(ServerSocket, (SOCKADDR*) &clientAddress, &szClientAddress);
+        SOCKET clientSocket = accept(server_socket, (SOCKADDR*) &clientAddress, &szClientAddress);
+
 
         if (clientSocket == INVALID_SOCKET)
         {
             cout << "Failed to accept client request" << endl;
             cout << "Error: " << WSAGetLastError() << endl;
-            closesocket(ServerSocket);
+            closesocket(server_socket);
             WSACleanup();
             ExitProcess(EXIT_FAILURE);
         }
 
-        int clientCount = ClientCount.load(); //obtain the current value of the thread-safe client counter
-        if (clientCount < MAX_CLIENTS)
+        if (thread_count < MAX_CLIENTS)
         {
             /*
 				Start new client communication on separate thread
@@ -121,36 +118,52 @@ template <typename T> void BaseServer<T>::Listen()
                 thread, we have to use & and this in the thread call
                 otherwise, we could just do: thread(HandleClient, clientSocket)
             */
-            ClientConnectionData data { clientCount + 1, clientSocket, clientAddress };
-            thread new_connection(&BaseServer::HandleClient, this, data);
-            new_connection.detach(); //Detach so that the client data doesn't get invalidated on next loop
+
+            ClientConnection* client_connection = new ClientConnection(clientSocket, clientAddress);
+			thread *client_thread = new thread(&BaseServer::HandleClient, this, client_connection);
+
+            ClientConnectionHandler *client_connection_handler = new ClientConnectionHandler(client_thread, client_connection);
+            client_connection_handlers.push_back(client_connection_handler);
+
+            thread_count++;
+            cout << "Clients connected: " << thread_count << endl;
         }
         else 
         {
             cout << "\nCONNECTION ERROR: Max clients exceeded. Closing last attempted connection...\n";
             closesocket(clientSocket);
         }
+
+        /*
+        for (vector<thread>::iterator currentThread = client_connections.begin(); currentThread != client_connections.end(); currentThread++)
+        {
+            bool threadIsFinished = currentThread->joinable();
+            if (threadIsFinished)
+            {
+                currentThread->join();
+                thread_count--;
+
+                cout << "Client closed the connection" << endl;
+                cout << "Client count: " << thread_count << endl;
+            }
+        }
+        */
     }
 
-    closesocket(ServerSocket);
+    closesocket(server_socket);
     WSACleanup();
 }
 
-
-template <typename T> void BaseServer<T>::HandleClient(ClientConnectionData connectionData)
+template <typename T> void BaseServer<T>::HandleClient(ClientConnection *connection)
 {
     bool success;
-
-    //Increase the count of clients in use
-    int clientCount = ClientCount.load();
-    ClientCount.store(clientCount + 1);
-
     int monitorResult;
+
 	while (true)
 	{
         fd_set readset; //data structure that represents a set of socket descriptors (array of integers)
         FD_ZERO(&readset); //clear out the set of sockets
-        FD_SET(connectionData.clientSocket, &readset); //add specific socket to to the set
+        FD_SET(connection->client_socket, &readset); //add specific socket to to the set
 
         timeval timeout;
         timeout.tv_sec = SOCKET_TIMEOUT; 
@@ -164,14 +177,14 @@ template <typename T> void BaseServer<T>::HandleClient(ClientConnectionData conn
         }
         else if (monitorResult == RESULT_TIMEOUT)
         {
-            cout << "\nTIMEOUT: Client #" << connectionData.threadId << "\n";
+            cout << "\nTIMEOUT: Client #" << "1" << "\n";
             break;
         }
 
         //socket is ready to read data
-        if (FD_ISSET(connectionData.clientSocket, &readset)) 
+        if (FD_ISSET(connection->client_socket, &readset)) 
         {
-            success = ReceiveAndRespond(connectionData.clientSocket);
+            success = ReceiveAndRespond(connection->client_socket);
 
             if (success == false)
             {
@@ -180,12 +193,10 @@ template <typename T> void BaseServer<T>::HandleClient(ClientConnectionData conn
 		}
 	}
 
-	closesocket(connectionData.clientSocket);
+    connection->is_finished = true;
+	closesocket(connection->client_socket);
 
-    cout << "\nDISCONNECTED: Client #" << connectionData.threadId << "\n";
-
-	int currentCount = ClientCount.load();
-	ClientCount.store(currentCount - 1);
+    cout << "\nDISCONNECTED: Client #" << "1" << "\n";
 }
 
 template <typename T> bool BaseServer<T>::ReceiveAndRespond(SOCKET socket)
