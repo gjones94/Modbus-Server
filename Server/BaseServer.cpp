@@ -124,7 +124,6 @@ template <typename T> void BaseServer<T>::Listen()
             ClientConnectionData data { clientCount + 1, clientSocket, clientAddress };
             thread new_connection(&BaseServer::HandleClient, this, data);
             new_connection.detach(); //Detach so that the client data doesn't get invalidated on next loop
-
         }
         else 
         {
@@ -141,7 +140,6 @@ template <typename T> void BaseServer<T>::Listen()
 template <typename T> void BaseServer<T>::HandleClient(ClientConnectionData connectionData)
 {
     bool success;
-    T recvData;
 
     //Increase the count of clients in use
     int clientCount = ClientCount.load();
@@ -173,20 +171,15 @@ template <typename T> void BaseServer<T>::HandleClient(ClientConnectionData conn
         //socket is ready to read data
         if (FD_ISSET(connectionData.clientSocket, &readset)) 
         {
-            success = Receive(connectionData.clientSocket, &recvData);
+            success = ReceiveAndRespond(connectionData.clientSocket);
 
             if (success == false)
             {
                 break;
             }
-
-            //Send back what we received as the default response
-            T responseData = GenerateResponse(recvData);
-
-            success = Send(connectionData.clientSocket, responseData);
-		
 		}
 	}
+
 	closesocket(connectionData.clientSocket);
 
     cout << "\nDISCONNECTED: Client #" << connectionData.threadId << "\n";
@@ -195,31 +188,30 @@ template <typename T> void BaseServer<T>::HandleClient(ClientConnectionData conn
 	ClientCount.store(currentCount - 1);
 }
 
-template <typename T> bool BaseServer<T>::Receive(SOCKET clientSocket, T* receiveData)
+template <typename T> bool BaseServer<T>::ReceiveAndRespond(SOCKET socket)
 {
-	int bytesReceived = recv(clientSocket, (char *) receiveData, sizeof(receiveData), 0);
+    char buffer[MAX_BUFFER_SIZE];
 
-	if (bytesReceived <= SOCKET_ERROR)
-	{
+    int bytesReceived = recv(socket, (char*) buffer, MAX_BUFFER_SIZE, 0);
+    if (bytesReceived <= SOCKET_ERROR)
+    {
         return false;
-	}
+    }
 
-    return true;
-}
+    cout << "Request: " << buffer << endl;
+    cout << "Size: " << bytesReceived << endl;
 
-template <typename T> T BaseServer<T>::GenerateResponse(T clientRequestData)
-{
-    return clientRequestData;
-}
-
-
-template <typename T> bool BaseServer<T>::Send(SOCKET clientSocket, T sendData)
-{
-    int bytesSent = send(clientSocket, (char*) &sendData, sizeof(sendData), 0);
+    cout << "\n";
+    int bytesSent = send(socket, (char*) buffer, MAX_BUFFER_SIZE, 0);
     if (bytesSent <= SOCKET_ERROR)
     {
         return false;
     }
+
+    cout << "Response: " << bytesSent << endl;
+    cout << "Size: " << bytesSent << endl;
+
+    cout << "\n\n";
 
     return true;
 }

@@ -52,6 +52,7 @@ class BaseServer
 		/// ClientId, Socket, IP address
 		/// </summary>
 		ClientConnectionData ClientData;
+
 		/// <summary>
 		/// Keeps track of the number of active clients
 		/// </summary>
@@ -79,11 +80,18 @@ class BaseServer
 		/// </summary>
 		/// <param name="data"></param>
 		void HandleClient(ClientConnectionData data);
+		
+		/// <summary>
+		/// Receive request and send response
+		/// </summary>
+		/// <param name="socket"></param>
+		/// <returns></returns>
+		virtual bool ReceiveAndRespond(SOCKET socket);
 
-		bool Send(SOCKET clientSocket, T sendData);
+		//bool Send(SOCKET clientSocket, T sendData);
 
-		bool Receive(SOCKET clientSocket, T *receiveData);
+		//bool Receive(SOCKET clientSocket, T *receiveData);
 
-		T GenerateResponse(T clientRequestData);
+		//T GenerateResponse(T clientRequestData);
 };
 
