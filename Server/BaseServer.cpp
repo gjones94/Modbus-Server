@@ -5,6 +5,7 @@ using namespace std;
 template <typename T> BaseServer<T>::BaseServer()
 {
     port = PORT;
+    client_count = 0;
     server_socket = INVALID_SOCKET;
     version = MAKEWORD(0, 0);
 };
@@ -23,7 +24,6 @@ template <typename T> void BaseServer<T>::Start()
 		Listen();
     }
 }
-
 
 template <typename T> bool BaseServer<T>::InitializeSocket()
 {
@@ -56,7 +56,6 @@ template <typename T> bool BaseServer<T>::InitializeSocket()
     return true;
 }
 
-
 template <typename T> bool BaseServer<T>::BindSocket()
 {
     sockaddr_in serverIPAddress;
@@ -77,7 +76,6 @@ template <typename T> bool BaseServer<T>::BindSocket()
     return true;
 }
 
-
 template <typename T> void BaseServer<T>::Listen()
 {
     u_long mode = 1; //non blocking
@@ -93,37 +91,21 @@ template <typename T> void BaseServer<T>::Listen()
     }
 
 	cout << "Listening for incoming connections on port " << port << " ..." << endl;
+    PrintClientCount();
 
     while (true)
     {
         sockaddr_in clientAddress;
         int szClientAddress = sizeof(clientAddress);
 
+        //Non-blocking
         SOCKET clientSocket = accept(server_socket, (SOCKADDR*) &clientAddress, &szClientAddress);
 
         if (clientSocket != SOCKET_ERROR)
         {
-			if (thread_count < MAX_CLIENTS)
+			if (client_count < MAX_CLIENTS)
 			{
-				/*
-					Start new client communication on separate thread
-					---------------------------------------------------
-					Since this is a member function that we are spinning off in a 
-					thread, we have to use & and this in the thread call
-					otherwise, we could just do: thread(HandleClient, clientSocket)
-				*/
-
-                /* 
-					NOTE: We must use pointers for the client_connection and client_thread. If we don't, 
-                    the local variables will be destroyed and invalidate the references we passed to the connection handler
-                */
-				ClientConnection* client_connection = new ClientConnection(clientSocket, clientAddress);
-				thread *client_thread = new thread(&BaseServer::HandleClient, this, client_connection);
-
-				client_connection_handlers.push_back(new ClientConnectionHandler(client_connection, client_thread));
-                thread_count++;
-
-                PrintClientCount();
+                StartClientThread(clientSocket, clientAddress);
 			}
 			else 
 			{
@@ -132,33 +114,28 @@ template <typename T> void BaseServer<T>::Listen()
 			}
         }
 
-        for (vector<ClientConnectionHandler*>::iterator handler = client_connection_handlers.begin(); handler != client_connection_handlers.end();)
-        {
-            bool finished = (*handler)->client_connection->is_finished;
-            if (finished)
-            {
-                bool joinable = (*handler)->client_thread->joinable();
-				(*handler)->client_thread->join();
-
-                thread_count--;
-                cout << "Client closed the connection" << endl;
-                PrintClientCount();
-
-                //get the next valid iterator after removing from the list
-                handler = client_connection_handlers.erase(handler);
-            }
-            else 
-            {
-                //otherwise go to next iterator
-                handler++;
-            }
-        }
+        RemoveInactiveClients();
 
         this_thread::sleep_for(chrono::milliseconds(100));
     }
 
     closesocket(server_socket);
     WSACleanup();
+}
+
+template <typename T> void BaseServer<T>::StartClientThread(SOCKET client_socket, sockaddr_in client_address)
+{
+	/*
+		NOTE: Use pointers for the client_connection and client_thread.
+		Otherwise the stack variables will be destroyed and invalidate the references we passed to the connection handler
+	*/
+    ClientConnection* client_connection = new ClientConnection(client_socket, client_address);
+    thread* client_thread = new thread(&BaseServer::HandleClient, this, client_connection);
+
+    //Add handler for the main thread to monitor the client
+    client_connection_handlers.push_back(new ClientConnectionHandler(client_connection, client_thread));
+    client_count++;
+    PrintClientCount();
 }
 
 template <typename T> void BaseServer<T>::HandleClient(ClientConnection *connection)
@@ -200,15 +177,43 @@ template <typename T> void BaseServer<T>::HandleClient(ClientConnection *connect
 		}
 	}
 
-    connection->is_finished = true;
 	closesocket(connection->client_socket);
+    connection->client_state = CLOSED;
+}
+
+template <typename T> void BaseServer<T>::RemoveInactiveClients()
+{
+    for (vector<ClientConnectionHandler*>::iterator client_handler = client_connection_handlers.begin(); client_handler != client_connection_handlers.end();)
+    {
+        ClientConnectionState client_state = (*client_handler)->client_connection->client_state;
+
+        if (client_state == INACTIVE || client_state == CLOSED)
+        {
+            bool joinable = (*client_handler)->client_thread->joinable(); //make sure thread is not detached or already joined
+            if (joinable)
+            {
+				(*client_handler)->client_thread->join();
+            }
+
+            client_count--;
+			PrintClientCount();
+
+            //get the next valid iterator after removing from the list
+            client_handler = client_connection_handlers.erase(client_handler);
+        }
+        else
+        {
+            //otherwise go to next client handler
+            client_handler++;
+        }
+    }
 }
 
 template <typename T> bool BaseServer<T>::ReceiveAndRespond(SOCKET socket)
 {
-    char buffer[MAX_BUFFER_SIZE];
+    char buffer[BUFFER_SIZE];
 
-    int bytesReceived = recv(socket, (char*) buffer, MAX_BUFFER_SIZE, 0);
+    int bytesReceived = recv(socket, (char*) buffer, BUFFER_SIZE, 0);
     if (bytesReceived <= SOCKET_ERROR)
     {
         return false;
@@ -218,7 +223,7 @@ template <typename T> bool BaseServer<T>::ReceiveAndRespond(SOCKET socket)
     cout << "Size: " << bytesReceived << endl;
 
     cout << "\n";
-    int bytesSent = send(socket, (char*) buffer, MAX_BUFFER_SIZE, 0);
+    int bytesSent = send(socket, (char*) buffer, BUFFER_SIZE, 0);
     if (bytesSent <= SOCKET_ERROR)
     {
         return false;
@@ -236,7 +241,7 @@ template <typename T> void BaseServer<T>::PrintClientCount()
 {
     cout << endl;
     cout << "====================================" << endl;
-    cout << "Active Clients: " << thread_count << endl;
+    cout << "Active Clients: " << client_count << endl;
     cout << "====================================" << endl;
     cout << endl;
 }

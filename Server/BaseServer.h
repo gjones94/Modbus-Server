@@ -16,33 +16,33 @@
 
 using namespace std;
 
-/* ======CONFIGURABLE======*/
+/* ======CONFIGURABLE====== */
 #define PORT 502
 #define SOCKET_TIMEOUT 60
-#define MAX_CLIENTS 30
-#define MAX_BUFFER_SIZE 1024
-/* ====END CONFIGURABLE====*/
+#define MAX_CLIENTS 10
+#define BUFFER_SIZE 1024
+/* ====END CONFIGURABLE==== */
 
-#define MAX_IP_LENGTH 16
+#define IP_ADDRESS_LENGTH 16
 #define RESULT_TIMEOUT 0
 
-const char CLIENT_DISCONNECT[] = "Exit";
+enum ClientConnectionState
+{
+	ACTIVE,
+	INACTIVE,
+	CLOSED
+};
 
 typedef struct ClientConnection
 {
 	SOCKET client_socket;
 	sockaddr_in client_address;
-	bool is_finished;
+	ClientConnectionState client_state;
 	mutex finish_lock;
 
 	ClientConnection(SOCKET socket, sockaddr_in address) : client_socket(socket), client_address(address) 
 	{
-		is_finished = false;
-	}
-
-	~ClientConnection()
-	{
-		cout << "Client Connection Deconstructed" << endl;
+		client_state = ACTIVE;
 	}
 
 } ClientConnection;
@@ -56,7 +56,8 @@ typedef struct ClientConnectionHandler
 
 	~ClientConnectionHandler()
 	{
-		cout << "Client handler deconstructed!" << endl;
+		delete client_thread;
+		delete client_connection;
 	}
 
 } ClientConnectionHandler;
@@ -73,7 +74,7 @@ class BaseServer
 		WORD version;
 		SOCKET server_socket;
 		unsigned short port;
-		unsigned short thread_count;
+		unsigned short client_count;
 		vector<ClientConnectionHandler*> client_connection_handlers;
 
 		/// <summary>
@@ -89,16 +90,35 @@ class BaseServer
 		bool BindSocket();
 
 		/// <summary>
-		/// Starts listening for client connections on continuous loop
+		/// Listens for client connections
 		/// </summary>
+		/// <remarks>
+		/// ========================================================
+		/// Start separate client thread upon accepting connection.
+		/// Close client threads that have finished.
+		/// ========================================================
+		/// </remarks>
 		void Listen();
+
+		/// <summary>
+        /// Start new client communication on separate thread.
+		/// </summary>
+		/// <param name="client_socket"></param>
+		/// <param name="client_address"></param>
+		void StartClientThread(SOCKET client_socket, sockaddr_in client_address);
+
+		/// <summary>
+		/// Free up resources from clients
+		/// that have ended communications
+		/// </summary>
+		void RemoveInactiveClients();
 
 		/// <summary>
 		/// Client communication handler that runs on a separate thread
 		/// </summary>
 		/// <param name="data"></param>
 		void HandleClient(ClientConnection *data);
-		
+
 		/// <summary>
 		/// Receive request and send response
 		/// </summary>
@@ -107,11 +127,5 @@ class BaseServer
 		virtual bool ReceiveAndRespond(SOCKET socket);
 
 		virtual void PrintClientCount();
-
-		//bool Send(SOCKET clientSocket, T sendData);
-
-		//bool Receive(SOCKET clientSocket, T *receiveData);
-
-		//T GenerateResponse(T clientRequestData);
 };
 
