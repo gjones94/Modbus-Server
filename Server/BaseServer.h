@@ -35,12 +35,13 @@ enum ClientConnectionState
 
 typedef struct ClientConnection
 {
+	int client_id;
 	SOCKET client_socket;
 	sockaddr_in client_address;
 	ClientConnectionState client_state;
-	mutex finish_lock;
+	mutex client_state_mutex;
 
-	ClientConnection(SOCKET socket, sockaddr_in address) : client_socket(socket), client_address(address) 
+	ClientConnection(SOCKET socket, sockaddr_in address, int id) : client_socket(socket), client_address(address), client_id(id)
 	{
 		client_state = ACTIVE;
 	}
@@ -126,6 +127,9 @@ class BaseServer
 		/// <returns></returns>
 		virtual bool ReceiveAndRespond(SOCKET socket);
 
+		char* GetIPAddress(sockaddr_in ip_address);
+
+		int GetClientId();
+
 		virtual void PrintClientCount();
 };
-
