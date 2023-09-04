@@ -3,7 +3,7 @@
 #include "ModbusPacket.h"
 #include <cmath>
 
-#define DATA_BLOCK_SIZE 4096
+#define MODBUS_REGISTER_CAPACITY 100000
 #define SIZE_OF_BYTE 8
 #define BYTES_PER_REG 2
 #define BITS_PER_COIL 1
@@ -20,10 +20,10 @@ class ModbusSlave : public BaseServer<ModbusPacket>
 
 	private:
 		/* Memory Blocks */
-		bool* CoilRegisters; //65536
-		bool* StatusRegisters; //65536
-		unsigned short* InputRegisters; //4096
-		unsigned short* HoldingRegisters; //4096
+		bool* coil_registers; //65536
+		bool* status_registers; //65536
+		unsigned short* input_registers; //4096
+		unsigned short* holding_registers; //4096
 
 		/* Options */
 		bool ZeroBasedAddressing;

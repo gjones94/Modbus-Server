@@ -11,34 +11,38 @@ ModbusSlave::ModbusSlave(int port)
 
 void ModbusSlave::InitializeRegisters()
 {
-	//TODO use constructors instead
-	CoilRegisters = (bool*) calloc(DATA_BLOCK_SIZE * BITS_PER_REG, sizeof(bool));
-	StatusRegisters = (bool*) calloc(DATA_BLOCK_SIZE * BITS_PER_REG, sizeof(bool));
-	InputRegisters = (unsigned short *) calloc(DATA_BLOCK_SIZE, sizeof(unsigned short));
-	HoldingRegisters = (unsigned short*) calloc(DATA_BLOCK_SIZE, sizeof(unsigned short));
+	coil_registers = new bool[MODBUS_REGISTER_CAPACITY];
+	status_registers = new bool[MODBUS_REGISTER_CAPACITY];
+	input_registers = new unsigned short[MODBUS_REGISTER_CAPACITY];
+	holding_registers = new unsigned short[MODBUS_REGISTER_CAPACITY];
 
-	StatusRegisters[0] = true;
-	StatusRegisters[1] = true;
-	StatusRegisters[2] = true;
-	StatusRegisters[3] = true;
-	StatusRegisters[4] = true;
-	StatusRegisters[5] = true;
-	StatusRegisters[6] = true;
-	StatusRegisters[7] = true;
+	memset(coil_registers, 0, MODBUS_REGISTER_CAPACITY);
+	memset(status_registers, 0, MODBUS_REGISTER_CAPACITY);
+	memset(input_registers, 0, MODBUS_REGISTER_CAPACITY);
+	memset(holding_registers, 0, MODBUS_REGISTER_CAPACITY);
 
-	StatusRegisters[8] = false;
-	StatusRegisters[9] = false;
-	StatusRegisters[10] = false;
-	StatusRegisters[11] = false;
-	StatusRegisters[12] = false;
-	StatusRegisters[13] = false;
-	StatusRegisters[14] = false;
-	StatusRegisters[15] = false;
+	status_registers[0] = true;
+	status_registers[1] = true;
+	status_registers[2] = true;
+	status_registers[3] = true;
+	status_registers[4] = true;
+	status_registers[5] = true;
+	status_registers[6] = true;
+	status_registers[7] = true;
 
-	StatusRegisters[16] = true;
-	StatusRegisters[17] = true;
-	StatusRegisters[18] = true;
-	StatusRegisters[19] = true;
+	status_registers[8] = false;
+	status_registers[9] = false;
+	status_registers[10] = false;
+	status_registers[11] = false;
+	status_registers[12] = false;
+	status_registers[13] = false;
+	status_registers[14] = false;
+	status_registers[15] = false;
+
+	status_registers[16] = true;
+	status_registers[17] = true;
+	status_registers[18] = true;
+	status_registers[19] = true;
 }
 
 void ModbusSlave::Start()
@@ -75,10 +79,10 @@ ModbusPacket ModbusSlave::GetResponse(const ModbusPacket request)
 	switch (request.function)
 	{
 		case READ_COILS:
-			response = ReadCoilStatusRegisters(CoilRegisters, request);
+			response = ReadCoilStatusRegisters(coil_registers, request);
 			break;
 		case READ_INPUTS:
-			response = ReadCoilStatusRegisters(StatusRegisters, request);
+			response = ReadCoilStatusRegisters(status_registers, request);
 			break;
 		case READ_HOLDING_REGISTERS:
 			//responseData = Read(HOLDING_REGISTER, &request);
