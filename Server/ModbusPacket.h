@@ -43,6 +43,15 @@ enum STATUS : uint8_t
 };
 
 #define HEADER_LENGTH 8
+#define BASE_MESSAGE_LENGTH 2 // UID (1 byte) + FCODE (1 byte)
+#define RQ_READ_INFO_SZ 4
+#define RQ_WRITE_SINGLE_INFO_SZ 2
+#define RQ_WRITE_MULTIPLE_INFO_SZ 5
+
+#define RES_READ_INFO_SZ 1 // 1 Byte representing count of bytes in response
+#define RES_WRITE_INFO_SZ 4
+#define RES_WRITES_INFO_SZ 4
+
 enum REQUEST : int
 {
 	TID_HI,
@@ -54,32 +63,28 @@ enum REQUEST : int
 	UID, //included in message length count
 	FCODE, //included in message length count
 
-	DATA_START
+	INDEX_OF_FIRST_DATA_BYTE
 };
-#define BASE_MESSAGE_LENGTH 2 // UID (1 byte) + FCODE (1 byte)
 
 /* Functions (1 - 4) */
-#define RQ_READ_INFO_SZ 4
 enum RQ_READ
 {
-	RQ_ADDR_HI = 0,
-	RQ_ADDR_LO = 1,
-	RQ_SIZE_HI = 2,
-	RQ_SIZE_LO = 3
+	RQ_ADDR_HI,
+	RQ_ADDR_LO,
+	RQ_SIZE_HI,
+	RQ_SIZE_LO
 };
 
 /* (Functions 5, 6) */
-#define RQ_WRITE_SINGLE_INFO_SZ 2
 enum RQ_WRITE_SINGLE : int
 {
-	RQ_WRITE_ADDR_HI = 0,
-	RQ_WRITE_ADDR_LO = 1,
-	RQ_WRITE_VALUE_HI = 2,
-	RQ_WRITE_VALUE_LO = 3
+	RQ_WRITE_ADDR_HI,
+	RQ_WRITE_ADDR_LO,
+	RQ_WRITE_VALUE_HI,
+	RQ_WRITE_VALUE_LO,
 };
 
 /* (Functions 15, 16) */
-#define RQ_WRITE_MULTIPLE_INFO_SZ 5
 enum RQ_WRITE_MULTIPLE : int
 {
 	RQ_WRITES_ADDR_HI,
@@ -89,42 +94,39 @@ enum RQ_WRITE_MULTIPLE : int
 	RQ_WRITE_BYTE_COUNT
 };
 
-#define RES_READ_INFO_SZ 1 // 1 Byte representing count of bytes in response
 enum RES_READ : int
 {
-	RES_READ_BYTE_COUNT = 0, //First byte indicates number of data bytes to follow
+	RES_READ_BYTE_COUNT //First byte indicates number of data bytes to follow
 };
 
-#define RES_WRITE_INFO_SZ 4
 enum RES_WRITE_SINGLE : int
 {
-	RES_WRITE_ADDR_HI = 0, //first byte indicates Hi byte of the address written to
-	RES_WRITE_ADDR_LO = 1, //second byte indiciates the Lo byte of the address written to
-	RES_WRITE_VALUE_HI = 2, //first byte indicates the Hi byte of the value written
-	RES_WRITE_VALUE_LO = 3, //second byte indicates the Lo byte of the value written
+	RES_WRITE_ADDR_HI, //first byte indicates Hi byte of the address written to
+	RES_WRITE_ADDR_LO, //second byte indiciates the Lo byte of the address written to
+	RES_WRITE_VALUE_HI, //first byte indicates the Hi byte of the value written
+	RES_WRITE_VALUE_LO //second byte indicates the Lo byte of the value written
 };
 
-#define RES_WRITES_INFO_SZ 4
 enum RES_WRITE_MULTIPLE : int
 {
-	RES_WRITES_ADDR_HI = 0, //first byte indicates Hi byte of the address written to
-	RES_WRITES_ADDR_LO = 1, //second byte indiciates the Lo byte of the address written to
-	RES_WRITES_SIZE_HI = 2, //first byte indicates the Hi byte of the number of values written
-	RES_WRITES_SIZE_LO = 3 //second byte indicates the Lo byte of the number of values written
+	RES_WRITES_ADDR_HI, //first byte indicates Hi byte of the address written to
+	RES_WRITES_ADDR_LO, //second byte indiciates the Lo byte of the address written to
+	RES_WRITES_SIZE_HI, //first byte indicates the Hi byte of the number of values written
+	RES_WRITES_SIZE_LO //second byte indicates the Lo byte of the number of values written
 };
 
 enum ErrorCodes : uint8_t
 {
-	IllegalFunction = 0x01,
-	IllegalAddress = 0x02,
-	IllegalDataValue = 0x03,
-	SlaveDeviceFailure = 0x04,
-	Acknowledge = 0x05,
-	SlaveDeviceBusy = 0x06,
-	NegativeAcknlowedge = 0x07,
-	MemoryParityError = 0x08,
-	GatewayPathUnavailable = 0x10,
-	GatewayFailedToResponse = 0x11
+	ILLEGAL_FUNCTION = 0x01,
+	ILLEGAL_ADDRESS = 0x02,
+	ILLEGAL_DATA_VALUE = 0x03,
+	SLAVE_DEVICE_FAILURE = 0x04,
+	ACK = 0x05,
+	SLAVE_DEVICE_BUSY = 0x06,
+	NEGATIVE_ACK = 0x07,
+	MEMORY_PARITY_ERROR = 0x08,
+	GATEWAY_PATH_UNAVAILABLE = 0x10,
+	GATEWAY_FAILED_TO_RESPOND = 0x11
 };
 
 enum FunctionCodes : uint8_t
@@ -157,25 +159,28 @@ class ModbusPacket
 {
 	public:
 		/* MBAP Header */
-		uint16_t transaction_id;
-		uint16_t protocol_id;
-		uint16_t message_length;
+		unsigned short transaction_id;
+		unsigned short protocol_id;
+		unsigned short message_length;
 		uint8_t unit_id;
 
 		/* PDU Data */
 		uint8_t function;
 		uint8_t *data;
 
-		/* Request Methods */
+		/* Format Methods */
 		void SetNetworkByteOrder();
 		void SetHostByteOrder();
-		void ParseRawRequest(const char *data);
-		uint16_t GetStartAddress(bool zeroBasedAddressing) const;
-		uint16_t GetRequestSize() const;
-		uint16_t GetMessageLength() const;
-		uint16_t GetSingleWriteValue();
-		static char* Serialize(const ModbusPacket* data);
 
+		/* Initializers */
+		static ModbusPacket Deserialize(const char *buffer);
+		static bool Serialize(const ModbusPacket& request, char* buffer);
+
+		/* Data Section Helpers*/
+		unsigned short GetRequestStartAddress(bool zeroBasedAddressing) const;
+		unsigned short GetRequestSize() const;
+		unsigned short GetMessageLength() const;
+		unsigned short GetSingleWriteValue();
 
 		/* Diagnostics */
 		void PrintHeader();
@@ -188,27 +193,36 @@ class ModbusPacket
 			message_length = 0;
 			unit_id = 0;
 			function = 0;
+			byte_format = LSB;
 			data = nullptr;
 		};
 
 
+		//Copy constructor
 		ModbusPacket(const ModbusPacket& other)
 		{
+			cout << "Copy constructor called" << endl;
 			transaction_id = other.transaction_id;
 			protocol_id = other.protocol_id;
 			message_length = other.message_length;
 			unit_id = other.unit_id;
 			function = other.function;
+
 			int data_size = message_length - BASE_MESSAGE_LENGTH;
 			data = new uint8_t[data_size];
+
 			for (int i = 0; i < data_size; i++)
 			{
 				data[i] = other.data[i];
 			}
+
+			byte_format = other.byte_format;
 		}
 
+		//Assignment constructor
 		ModbusPacket& operator=(const ModbusPacket& other)
 		{
+			cout << "Assignment constructor called" << endl;
 			if (this != &other)
 			{
 				delete[] data;
@@ -218,6 +232,7 @@ class ModbusPacket
 				message_length = other.message_length;
 				unit_id = other.unit_id;
 				function = other.function;
+
 				int data_size = message_length - BASE_MESSAGE_LENGTH;
 				data = new uint8_t[data_size];
 				for (int i = 0; i < data_size; i++)
@@ -232,11 +247,16 @@ class ModbusPacket
 		/* Deconstructor */
 		~ModbusPacket()
 		{
+			cout << "Desctructor called" << endl;
+
 			if(data)
 				delete[] data;
 		}
 
 	private:
-		/* Tracking Endianess */
 		ENDIAN byte_format;
+
+		//helper to obtain data size from message length field
+		int GetDataSize() const;
+
 };

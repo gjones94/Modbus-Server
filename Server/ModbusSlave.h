@@ -22,14 +22,14 @@ class ModbusSlave : public BaseServer<ModbusPacket>
 		/* Memory Blocks */
 		bool* CoilRegisters; //65536
 		bool* StatusRegisters; //65536
-		uint16_t* InputRegisters; //4096
-		uint16_t* HoldingRegisters; //4096
+		unsigned short* InputRegisters; //4096
+		unsigned short* HoldingRegisters; //4096
 
 		/* Options */
 		bool ZeroBasedAddressing;
 
 		/* Initialization */
-		void InitializeMemory();
+		void InitializeRegisters();
 		void EnableZeroBasedAddressing(bool enabled);
 
 		/* Response Methods */
@@ -39,7 +39,7 @@ class ModbusSlave : public BaseServer<ModbusPacket>
 		ModbusPacket ReadCoilStatusRegisters(bool* registers, const ModbusPacket& request);
 		
 		/* Base Server override */
-		ModbusPacket GetResponse(char * requestData) override;
-		bool Send(SOCKET clientSocket, const ModbusPacket* sendData) override;
+		bool ReceiveAndRespond(SOCKET socket) override;
+		ModbusPacket GetResponse(const ModbusPacket requestData);
 };
 

@@ -5,47 +5,59 @@ ModbusSlave::ModbusSlave(int port)
 {
 	SetPort(port);
 
-	InitializeMemory();
+	InitializeRegisters();
 	EnableZeroBasedAddressing(true);
 }
 
-void ModbusSlave::InitializeMemory()
+void ModbusSlave::InitializeRegisters()
 {
 	//TODO use constructors instead
 	CoilRegisters = (bool*) calloc(DATA_BLOCK_SIZE * BITS_PER_REG, sizeof(bool));
 	StatusRegisters = (bool*) calloc(DATA_BLOCK_SIZE * BITS_PER_REG, sizeof(bool));
-	InputRegisters = (uint16_t*) calloc(DATA_BLOCK_SIZE, sizeof(uint16_t));
-	HoldingRegisters = (uint16_t*) calloc(DATA_BLOCK_SIZE, sizeof(uint16_t));
+	InputRegisters = (unsigned short *) calloc(DATA_BLOCK_SIZE, sizeof(unsigned short));
+	HoldingRegisters = (unsigned short*) calloc(DATA_BLOCK_SIZE, sizeof(unsigned short));
 
 	StatusRegisters[0] = true;
 	StatusRegisters[1] = true;
 	StatusRegisters[2] = true;
 	StatusRegisters[3] = true;
-
-	StatusRegisters[4] = false;
+	StatusRegisters[4] = true;
 	StatusRegisters[5] = true;
-	StatusRegisters[6] = false;
+	StatusRegisters[6] = true;
 	StatusRegisters[7] = true;
 
 	StatusRegisters[8] = false;
-	StatusRegisters[9] = true;
+	StatusRegisters[9] = false;
 	StatusRegisters[10] = false;
-	StatusRegisters[11] = true;
-
+	StatusRegisters[11] = false;
 	StatusRegisters[12] = false;
-	StatusRegisters[13] = true;
+	StatusRegisters[13] = false;
 	StatusRegisters[14] = false;
-	StatusRegisters[15] = true;
+	StatusRegisters[15] = false;
 
 	StatusRegisters[16] = true;
 	StatusRegisters[17] = true;
 	StatusRegisters[18] = true;
-	StatusRegisters[19] = false;
+	StatusRegisters[19] = true;
 }
 
 void ModbusSlave::Start()
 {
 	BaseServer::Start();
+}
+
+bool ModbusSlave::ReceiveAndRespond(SOCKET socket)
+{
+	char buffer[BUFFER_SIZE];
+	int bytesReceived = recv(socket, (char*)buffer, BUFFER_SIZE, 0);
+	ModbusPacket request;
+	ModbusPacket response; 
+
+	request = ModbusPacket::Deserialize(buffer);
+
+	response = GetResponse(request);
+
+	return true;
 }
 
 /*
@@ -56,11 +68,8 @@ void ModbusSlave::Start()
 	3) Data Requested (Functions 1-4) // Data Value Written (Functions 5, 6) // # Written (Functions 15, 16)
 	====================================================================
 */
-ModbusPacket ModbusSlave::GetResponse(char *requestData)
+ModbusPacket ModbusSlave::GetResponse(const ModbusPacket request)
 {
-	ModbusPacket request;
-	request.ParseRawRequest(requestData);
-
 	ModbusPacket response;
 
 	switch (request.function)
@@ -87,27 +96,29 @@ ModbusPacket ModbusSlave::GetResponse(char *requestData)
 			break;
 	}
 
-	response.transaction_id = htons(request.transaction_id);
-	response.protocol_id = htons(request.protocol_id);
+	response.transaction_id = request.transaction_id;
+	response.protocol_id = request.protocol_id;
 	response.unit_id = request.unit_id;
 	response.function = request.function;
+
+	response.PrintPacketBinary();
+	response.SetNetworkByteOrder();
+	response.PrintPacketBinary();
 
 	//for (int i = 0; i < response.message_length - 2; i++)
 	//{
 	//	Utils::PrintBinary<uint8_t>(response.data[i]);
 	//}
-
-	response.message_length = htons(response.message_length);
 	
 	return response;
 }
 
-bool ModbusSlave::Send(SOCKET socket, const ModbusPacket* sendData)
-{
-	char* serializedData = ModbusPacket::Serialize(sendData);
-
-	return true;
-}
+//bool ModbusSlave::Send(SOCKET socket, const ModbusPacket* sendData)
+//{
+//	char* serializedData = ModbusPacket::Serialize(sendData);
+//
+//	return true;
+//}
 
 size_t ModbusSlave::GetSendBufferSize(const ModbusPacket* sendData)
 {
@@ -142,9 +153,8 @@ size_t ModbusSlave::GetSendBufferSize(const ModbusPacket* sendData)
 */
 ModbusPacket ModbusSlave::ReadCoilStatusRegisters(bool* registers, const ModbusPacket& request)
 {
-
-	int start_address = request.GetStartAddress(ZeroBasedAddressing);
-	int request_size = request.GetRequestSize(); 
+	unsigned short start_address = request.GetRequestStartAddress(ZeroBasedAddressing);
+	unsigned short request_size = request.GetRequestSize(); 
 
 	ModbusPacket response;
 

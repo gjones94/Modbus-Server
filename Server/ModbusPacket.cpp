@@ -1,7 +1,7 @@
 
 #include "ModbusPacket.h"
 
-void ModbusPacket::SetNetworkByteOrder()
+void ModbusPacket::SetHostByteOrder()
 {
 	transaction_id = ntohs(transaction_id);
 	protocol_id = ntohs(protocol_id);
@@ -10,7 +10,7 @@ void ModbusPacket::SetNetworkByteOrder()
 	byte_format = LSB;
 }
 
-void ModbusPacket::SetHostByteOrder()
+void ModbusPacket::SetNetworkByteOrder()
 {
 	transaction_id = htons(transaction_id);
 	protocol_id = htons(protocol_id);
@@ -19,26 +19,47 @@ void ModbusPacket::SetHostByteOrder()
 	byte_format = MSB;
 }
 
-void ModbusPacket::ParseRawRequest(const char* requestData)
+ModbusPacket ModbusPacket::Deserialize(const char* in_buffer)
 {
+	ModbusPacket request;
 	//copy over header info
-	transaction_id = ntohs(MAKEWORD(requestData[TID_HI], requestData[TID_LO]));
-	protocol_id = ntohs(MAKEWORD(requestData[PID_HI], requestData[PID_LO]));
-	message_length = ntohs(MAKEWORD(requestData[LEN_HI], requestData[LEN_LO]));
-	unit_id = requestData[UID];
-	function = requestData[FCODE];
-	
-	//allocate and copy over data section
-	int data_size = message_length - BASE_MESSAGE_LENGTH;
-	data = new uint8_t[data_size];
-	memcpy(data, requestData + DATA_START, data_size);
+	request.transaction_id = ntohs(MAKEWORD(in_buffer[TID_HI], in_buffer[TID_LO]));
+	request.protocol_id = ntohs(MAKEWORD(in_buffer[PID_HI], in_buffer[PID_LO]));
+	request.message_length = ntohs(MAKEWORD(in_buffer[LEN_HI], in_buffer[LEN_LO]));
+	request.unit_id = in_buffer[UID];
+	request.function = in_buffer[FCODE];
 
-	byte_format = LSB;
+	//allocate and copy over data section
+	int data_size = request.GetDataSize();
+	request.data = new uint8_t[data_size];
+	memcpy(request.data, in_buffer + INDEX_OF_FIRST_DATA_BYTE, data_size);
+
+	request.byte_format = LSB; //This is default, but explicitly noting this
+
+	return request;
 }
 
-uint16_t ModbusPacket::GetStartAddress(bool zeroBasedAddressing) const
+bool ModbusPacket::Serialize(const ModbusPacket& in_packet, char* out_buffer)
 {
-	uint16_t address = ntohs(MAKEWORD(data[RQ_ADDR_HI], data[RQ_ADDR_LO]));
+	//TODO, test and make sure that endianess was maintained upon return
+	size_t data_size = in_packet.GetDataSize();
+
+	out_buffer = new char[HEADER_LENGTH + data_size];
+
+	if (out_buffer != nullptr)
+	{
+		memcpy(out_buffer, &in_packet, HEADER_LENGTH);
+		memcpy(out_buffer + INDEX_OF_FIRST_DATA_BYTE, in_packet.data, data_size);
+
+		in_packet.PrintPacketBinary();
+	}
+
+	return true;
+}
+
+unsigned short ModbusPacket::GetRequestStartAddress(bool zeroBasedAddressing) const
+{
+	unsigned short address = ntohs(MAKEWORD(data[RQ_ADDR_HI], data[RQ_ADDR_LO]));
 
 	if (zeroBasedAddressing == false)
 	{
@@ -55,89 +76,27 @@ uint16_t ModbusPacket::GetStartAddress(bool zeroBasedAddressing) const
 	return address;
 }
 
-uint16_t ModbusPacket::GetRequestSize() const
+unsigned short ModbusPacket::GetRequestSize() const
 {
-	uint16_t size = ntohs(MAKEWORD(data[RQ_SIZE_HI], data[RQ_SIZE_LO]));
+	unsigned short size = ntohs(MAKEWORD(data[RQ_SIZE_HI], data[RQ_SIZE_LO]));
 	return size;
 }
 
-uint16_t ModbusPacket::GetSingleWriteValue()
+unsigned short ModbusPacket::GetSingleWriteValue()
 {
-	uint16_t value = ntohs(MAKEWORD(data[RQ_WRITE_VALUE_HI], data[RQ_WRITE_VALUE_LO]));
+	unsigned short value = ntohs(MAKEWORD(data[RQ_WRITE_VALUE_HI], data[RQ_WRITE_VALUE_LO]));
 
 	return value;
 }
- 
-char* ModbusPacket::Serialize(const ModbusPacket* packet)
-{
-	//TODO, test and make sure that endianess was maintained upon return
-	size_t data_size = ntohs(packet->message_length) - BASE_MESSAGE_LENGTH;
 
-	char* data = new char[HEADER_LENGTH + data_size];
-
-	if (data != nullptr)
-	{
-		memcpy(data, packet, HEADER_LENGTH);
-		memcpy(data + DATA_START, packet->data, data_size);
-
-		packet->PrintPacketBinary();
-
-	/*	cout << endl;
-		cout << "TID" << endl;
-		Utils::PrintBinary(data[0]);
-		cout << " ";
-		Utils::PrintBinary(data[1]);
-
-		cout << endl;
-		cout << endl;
-
-		cout << "PID" << endl;
-		Utils::PrintBinary(data[2]);
-		cout << " ";
-		Utils::PrintBinary(data[3]);
-
-		cout << endl;
-		cout << endl;
-
-		cout << "Message Length" << endl;
-		Utils::PrintBinary(data[4]);
-		cout << " ";
-		Utils::PrintBinary(data[5]);
-
-		cout << endl;
-		cout << endl;
-
-		cout << "UID: " << endl;
-		Utils::PrintBinary(data[6]);
-
-		cout << endl;
-		cout << endl;
-
-		cout << "Function Code:" << endl;
-		Utils::PrintBinary(data[7]);
-		cout << endl;
-		cout << endl;
-
-		cout << "Data" << endl;
-		for (int i = DATA_START; i < (HEADER_LENGTH + data_size); i++)
-		{
-			Utils::PrintBinary(data[i]);
-			cout << " ";
-		}
-		cout << endl;*/
-
-	}
-
-	return (char*) data;
-}
 
 void ModbusPacket::PrintHeader()
 {
 	cout << endl;
 	cout << "=======Request Header Data=======" << endl;
-	cout << "TransactionId: " << transaction_id << endl;
-	cout << "ProtocolId: " << protocol_id << endl;
-	cout << "MessageLength: " << message_length << endl;
+	cout << "TransactionId: " << (byte_format == MSB ? ntohs(transaction_id) : transaction_id) << endl;
+	cout << "ProtocolId: " << (byte_format == MSB ? ntohs(protocol_id) : protocol_id) << endl;
+	cout << "MessageLength: " << (byte_format == MSB ? ntohs(message_length) : message_length) << endl;
 	cout << "UnitId: " << (int) unit_id << endl;
 	cout << "=================================" << endl;
 	cout << endl;
@@ -177,7 +136,11 @@ void ModbusPacket::PrintPacketBinary() const
 	cout << endl;
 
 	cout << "Data" << endl;
-	int data_size = ntohs(message_length) - BASE_MESSAGE_LENGTH;
+
+
+	int data_size = GetDataSize();
+
+
 	for (int i = 0; i < data_size; i++)
 	{
 		Utils::PrintBinary(data[i]);
@@ -185,6 +148,23 @@ void ModbusPacket::PrintPacketBinary() const
 	}
 	cout << endl;
 	cout << endl << "===================================" << endl;
+}
+
+int ModbusPacket::GetDataSize() const
+{
+	int data_size;
+
+	if (byte_format == MSB)
+	{
+		//swap byte order for host machine
+		data_size = ntohs(message_length) - BASE_MESSAGE_LENGTH;
+	}
+	else
+	{
+		data_size = message_length - BASE_MESSAGE_LENGTH;
+	}
+
+	return data_size;
 }
 
 

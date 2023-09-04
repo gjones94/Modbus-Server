@@ -98,6 +98,6 @@ void Utils::Reverse(T* array, int size)
 
 // Explicitly instantiate the Reverse<bool> function specialization
 template void Utils::PrintBinary<uint8_t>(uint8_t);
-template void Utils::PrintBinary<uint16_t>(uint16_t);
+template void Utils::PrintBinary<unsigned short>(unsigned short);
 template void Utils::PrintBinary<char>(char);
 template void Utils::Reverse<bool>(bool* array, int size);
