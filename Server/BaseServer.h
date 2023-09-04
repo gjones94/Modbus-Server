@@ -1,6 +1,5 @@
 #pragma once
-//Inform compiler to link the winsock2 library
-#pragma comment(lib, "ws2_32.lib") 
+#pragma comment(lib, "ws2_32.lib") //Inform compiler to link the winsock2 library
 
 #include <stdio.h>
 #include <WinSock2.h>
@@ -104,8 +103,8 @@ class BaseServer
 		/// <summary>
         /// Start new client communication on separate thread.
 		/// </summary>
-		/// <param name="client_socket"></param>
-		/// <param name="client_address"></param>
+		/// <param name="SOCKET [client_socket]"></param>
+		/// <param name="sockaddr_in [client_address]"></param>
 		void StartClientThread(SOCKET client_socket, sockaddr_in client_address);
 
 		/// <summary>
@@ -123,13 +122,16 @@ class BaseServer
 		/// <summary>
 		/// Receive request and send response
 		/// </summary>
-		/// <param name="socket"></param>
+		/// <param name="SOCKET [socket]"></param>
 		/// <returns></returns>
 		virtual bool ReceiveAndRespond(SOCKET socket);
 
+		/// <summary>
+		/// Get IP Address string representation of sockaddr_in structure
+		/// </summary>
+		/// <param name="sockaddr_in [ip_address]"></param>
+		/// <returns>char* [IP Address]</returns>
 		char* GetIPAddress(sockaddr_in ip_address);
-
-		int GetClientId();
 
 		virtual void PrintClientCount();
 };

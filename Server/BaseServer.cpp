@@ -133,14 +133,12 @@ template <typename T> void BaseServer<T>::StartClientThread(SOCKET client_socket
 		NOTE: Use pointers for the client_connection and client_thread.
 		Otherwise the stack variables will be destroyed and invalidate the references we passed to the connection handler
 	*/
-    int id = GetClientId();
-    ClientConnection* client_connection = new ClientConnection(client_socket, client_address, id);
+    ClientConnection* client_connection = new ClientConnection(client_socket, client_address, 1);
     thread* client_thread = new thread(&BaseServer::HandleClient, this, client_connection);
 
     //Add handler for client thread to allow the main thread to monitor the client
     client_connection_handlers.push_back(new ClientConnectionHandler(client_connection, client_thread));
     client_count++;
-    PrintClientCount();
 }
 
 template <typename T> void BaseServer<T>::HandleClient(ClientConnection *connection)
@@ -148,9 +146,10 @@ template <typename T> void BaseServer<T>::HandleClient(ClientConnection *connect
     bool success;
     int monitorResult;
 
+    thread::id thread_id = this_thread::get_id();
     char* client_ip_address = GetIPAddress(connection->client_address);
 
-    printf("\nClient %s connnected\n", client_ip_address);
+    cout << "CONNECTED [" << client_ip_address << "]" << " THREAD [" << thread_id << "]" << endl;
 
 	while (true)
 	{
@@ -179,7 +178,10 @@ template <typename T> void BaseServer<T>::HandleClient(ClientConnection *connect
         if (FD_ISSET(connection->client_socket, &readset)) 
         {
             success = ReceiveAndRespond(connection->client_socket);
-
+            if (success)
+            {
+                cout << "COMMUNICATION SUCCESS : [" << thread_id << "]" << endl;
+            }
             if (success == false)
             {
 				unique_lock<mutex> lock(connection->client_state_mutex); //this will auto release once function completes and lock is out of scope
@@ -189,6 +191,7 @@ template <typename T> void BaseServer<T>::HandleClient(ClientConnection *connect
 		}
 	}
 
+    cout << "DISCONNECTED [" << client_ip_address << "]" << " THREAD[" << thread_id << "]" << endl;
 	closesocket(connection->client_socket);
 }
 
@@ -215,7 +218,6 @@ template <typename T> void BaseServer<T>::RemoveInactiveClients()
             }
 
             client_count--;
-			PrintClientCount();
 
             //get the next valid iterator after removing from the list
             client_handler = client_connection_handlers.erase(client_handler);
@@ -238,20 +240,11 @@ template <typename T> bool BaseServer<T>::ReceiveAndRespond(SOCKET socket)
         return false;
     }
 
-    cout << "Request: " << buffer << endl;
-    cout << "Size: " << bytesReceived << endl;
-
-    cout << "\n";
     int bytesSent = send(socket, (char*) buffer, BUFFER_SIZE, 0);
     if (bytesSent <= SOCKET_ERROR)
     {
         return false;
     }
-
-    cout << "Response: " << bytesSent << endl;
-    cout << "Size: " << bytesSent << endl;
-
-    cout << "\n\n";
 
     return true;
 }
@@ -267,35 +260,6 @@ char* BaseServer<T>::GetIPAddress(sockaddr_in ip_address)
 	}
 
     return nullptr;
-}
-
-template<typename T>
-int BaseServer<T>::GetClientId()
-{
-    bool unique_id = true;
-    // Create a random number generator engine
-    random_device rd;  // Create a random device to seed the generator
-    mt19937 gen(rd()); // Create a Mersenne Twister pseudo-random generator
-
-    // Define a distribution for the range of integers
-    int min_value = 1;
-    int max_value = 255;
-    std::uniform_int_distribution<int> distribution(min_value, max_value);
-
-
-    int random_number = -1;
-
-    while (unique_id == false)
-    {
-		// Generate a random integer
-		random_number = distribution(gen);
-
-		//TODO Make sure that the value is not already being used by existing client
-        unique_id = true;
-    }
-
-
-    return random_number;
 }
 
 template <typename T> void BaseServer<T>::PrintClientCount()
