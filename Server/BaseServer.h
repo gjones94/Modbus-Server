@@ -1,13 +1,13 @@
 #pragma once
-//Inform compiler to link the winsock2 library
-#pragma comment(lib, "ws2_32.lib") 
-
+#pragma comment(lib, "ws2_32.lib") //Inform compiler to link the winsock2 library
 
 #include <stdio.h>
 #include <WinSock2.h>
 #include <string.h>
 #include <stdlib.h>
 #include <iostream>
+#include <vector>
+#include <thread>
 #include <csignal>
 #include <mutex>
 #include <Windows.h>
@@ -15,23 +15,52 @@
 
 using namespace std;
 
-/* ======CONFIGURABLE======*/
+/* ======CONFIGURABLE====== */
 #define PORT 502
 #define SOCKET_TIMEOUT 60
-#define MAX_CLIENTS 30
-#define MAX_REQUEST_SIZE 1024
-/* ====END CONFIGURABLE====*/
+#define MAX_CLIENTS 10
+#define BUFFER_SIZE 1024
+/* ====END CONFIGURABLE==== */
 
-#define MAX_IP_LENGTH 16
+#define IP_ADDRESS_LENGTH 16
 #define RESULT_TIMEOUT 0
 
-typedef struct ClientConnectionData
+enum ClientConnectionState
 {
-	int threadId;
-	SOCKET clientSocket;
-	sockaddr_in clientAddress;
+	ACTIVE,
+	INACTIVE,
+	CLOSED
+};
 
-} ClientConnectionData;
+typedef struct ClientConnection
+{
+	int client_id;
+	SOCKET client_socket;
+	sockaddr_in client_address;
+	ClientConnectionState client_state;
+	mutex client_state_mutex;
+
+	ClientConnection(SOCKET socket, sockaddr_in address, int id) : client_socket(socket), client_address(address), client_id(id)
+	{
+		client_state = ACTIVE;
+	}
+
+} ClientConnection;
+
+typedef struct ClientConnectionHandler
+{
+	thread *client_thread;
+	ClientConnection* client_connection;
+
+	ClientConnectionHandler(ClientConnection* connection, thread *thread) : client_connection(connection), client_thread(thread) {}
+
+	~ClientConnectionHandler()
+	{
+		delete client_thread;
+		delete client_connection;
+	}
+
+} ClientConnectionHandler;
 
 template <typename T>
 class BaseServer
@@ -42,19 +71,12 @@ class BaseServer
 	 	void Start();
 
 	private:
-		WSAData WSAData;
-		WORD Version;
-		SOCKET ServerSocket;
-		unsigned short Port;
-
-		/// <summary>
-		/// ClientId, Socket, IP address
-		/// </summary>
-		ClientConnectionData ClientData;
-		/// <summary>
-		/// Keeps track of the number of active clients
-		/// </summary>
-		atomic<int> ClientCount;
+		WSAData wsa_data;
+		WORD version;
+		SOCKET server_socket;
+		unsigned short port;
+		unsigned short client_count;
+		vector<ClientConnectionHandler*> client_connection_handlers;
 
 		/// <summary>
 		/// Initializes socket using WSAData
@@ -69,24 +91,47 @@ class BaseServer
 		bool BindSocket();
 
 		/// <summary>
-		/// Starts listening for client connections on continuous loop
+		/// Listens for client connections
 		/// </summary>
+		/// <remarks>
+		/// ========================================================
+		/// Start separate client thread upon accepting connection.
+		/// Close client threads that have finished.
+		/// ========================================================
+		/// </remarks>
 		void Listen();
+
+		/// <summary>
+        /// Start new client communication on separate thread.
+		/// </summary>
+		/// <param name="SOCKET [client_socket]"></param>
+		/// <param name="sockaddr_in [client_address]"></param>
+		void StartClientThread(SOCKET client_socket, sockaddr_in client_address);
+
+		/// <summary>
+		/// Free up resources from clients
+		/// that have ended communications
+		/// </summary>
+		void RemoveInactiveClients();
 
 		/// <summary>
 		/// Client communication handler that runs on a separate thread
 		/// </summary>
 		/// <param name="data"></param>
-		void HandleClient(SOCKET socket);
+		void HandleClient(ClientConnection *data);
 
 		/// <summary>
-		/// Sends data through the established client socket
+		/// Receive request and send response
 		/// </summary>
-		/// <param name="clientSocket"></param>
-		/// <param name="sendData"></param>
+		/// <param name="SOCKET [socket]"></param>
 		/// <returns></returns>
-		virtual bool Send(SOCKET clientSocket, const T* sendData);
+		virtual bool ReceiveAndRespond(SOCKET socket);
 
-		virtual T GetResponse(char* requestData);
+		/// <summary>
+		/// Get IP Address string representation of sockaddr_in structure
+		/// </summary>
+		/// <param name="sockaddr_in [ip_address]"></param>
+		/// <returns>char* [IP Address]</returns>
+		char* GetIPAddress(sockaddr_in ip_address);
+
 };
-
