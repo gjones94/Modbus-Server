@@ -133,5 +133,4 @@ class BaseServer
 		/// <returns>char* [IP Address]</returns>
 		char* GetIPAddress(sockaddr_in ip_address);
 
-		virtual void PrintClientCount();
 };

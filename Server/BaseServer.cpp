@@ -92,7 +92,6 @@ template <typename T> void BaseServer<T>::Listen()
     }
 
 	cout << "Listening for incoming connections on port " << port << " ..." << endl;
-    PrintClientCount();
 
     while (true)
     {
@@ -260,15 +259,6 @@ char* BaseServer<T>::GetIPAddress(sockaddr_in ip_address)
 	}
 
     return nullptr;
-}
-
-template <typename T> void BaseServer<T>::PrintClientCount()
-{
-    cout << endl;
-    cout << "====================================" << endl;
-    cout << "Active Clients: " << client_count << endl;
-    cout << "====================================" << endl;
-    cout << endl;
 }
 
 //explicitly inform compiler of the instantiations that will be used 
