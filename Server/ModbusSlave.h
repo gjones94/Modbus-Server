@@ -32,11 +32,22 @@ class ModbusSlave : public BaseServer<ModbusPacket>
 		void InitializeRegisters();
 		void EnableZeroBasedAddressing(bool enabled);
 
-		/* Response Methods */
+		/* Helpers */
+		unsigned short GetRequestStartAddress(const ModbusPacket &request);
 		size_t GetSendBufferSize(const ModbusPacket* sendData);
 
 		/* Read/Write Methods */
 		ModbusPacket ReadCoilStatusRegisters(bool* registers, const ModbusPacket& request);
+
+
+		/// <summary>
+		/// Validates request information
+		/// </summary>
+		/// <param name="ModbusPacket [request]"></param>
+		/// <returns>uint8_t [OK] if valid, [EXCEPTION_CODE] if invalid</returns>
+		uint8_t ValidateRequest(ModbusPacket request);
+
+		void SetException(ModbusPacket &response, uint8_t exception_code);
 		
 		/* Base Server override */
 		bool ReceiveAndRespond(SOCKET socket) override;

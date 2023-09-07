@@ -57,22 +57,10 @@ bool ModbusPacket::Serialize(const ModbusPacket& in_packet, char* out_buffer)
 	return true;
 }
 
-unsigned short ModbusPacket::GetRequestStartAddress(bool zeroBasedAddressing) const
+unsigned short ModbusPacket::GetRequestStartAddress() const
 {
 	unsigned short address = ntohs(MAKEWORD(data[RQ_ADDR_HI], data[RQ_ADDR_LO]));
 
-	if (zeroBasedAddressing == false)
-	{
-		address -= 1;
-	}
-	/*
-		With zero based addressing client will send 4 to get the 5th value.
-		0 1 2 3 [4]
-				5th value
-
-		If NOT zero based, client will send 5 to get 5th. But our indexing is still 0 based.
-		0 1 2 3 4 [5] - we would get the 6th value, so we need to subtract 1
-	*/
 	return address;
 }
 

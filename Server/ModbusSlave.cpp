@@ -98,6 +98,9 @@ ModbusPacket ModbusSlave::GetResponse(const ModbusPacket request)
 			break;
 		case WRITE_MULTIPLE_REGISTERS:
 			break;
+		default:
+			//TODO Exception code 01 Unsupported function
+			break;
 	}
 
 	response.transaction_id = request.transaction_id;
@@ -155,62 +158,129 @@ size_t ModbusSlave::GetSendBufferSize(const ModbusPacket* sendData)
 		 will be padded with zeros
 	====================================================================
 */
-ModbusPacket ModbusSlave::ReadCoilStatusRegisters(bool* registers, const ModbusPacket& request)
+ModbusPacket ModbusSlave::ReadCoilStatusRegisters(bool* register_data, const ModbusPacket& request)
 {
-	unsigned short start_address = request.GetRequestStartAddress(ZeroBasedAddressing);
-	unsigned short request_size = request.GetRequestSize(); 
-
 	ModbusPacket response;
 
-	int byte_count = Utils::NumBytesNeeded(request_size, BITS_PER_COIL);
+	//Populate response header
+	response.transaction_id = request.transaction_id;
+	response.protocol_id = request.protocol_id;
+	response.unit_id = request.unit_id;
+	response.function = request.function;
+
+	//Validate Request
+	uint8_t exception_code = ValidateRequest(request);
+	if (exception_code != OK)
+	{
+		SetException(response, exception_code);
+		return response;
+	}
+
+	//Obtain requested data
+	unsigned short start_address = GetRequestStartAddress(request);
+	unsigned short request_size = request.GetRequestSize(); 
+
+	int byte_count = Utils::GetNumBytesRequiredForData(request_size, BITS_PER_COIL);
+
+	if (byte_count <= 0)
+	{
+		SetException(response, ILLEGAL_DATA_VALUE); //requested no data
+		return response;
+	}
 
 	int data_block_size = RES_READ_INFO_SZ + byte_count;
 	response.data = new uint8_t[data_block_size];
 	response.data[RES_READ_BYTE_COUNT] = byte_count;
 	response.message_length = BASE_MESSAGE_LENGTH + data_block_size;
 
-	bool boolArray[SIZE_OF_BYTE];
-	bool needsPadding = false;
+	bool bool_array[SIZE_OF_BYTE];
+	bool current_byte_needs_padding = false;
 	int current_byte = 1;
 	int end_address = start_address + request_size;
 
-	for (int i = start_address; i < end_address; i += SIZE_OF_BYTE)
+	for (int current_address = start_address; current_address < end_address; current_address += SIZE_OF_BYTE)
 	{
-		int numberOfValues = SIZE_OF_BYTE;
+		int num_coils = SIZE_OF_BYTE;
 
 		//if next coil block exceeds total size requested, minimize acquisition to the request size
-		if ((i + SIZE_OF_BYTE) > end_address)
+		if ((current_address + SIZE_OF_BYTE) > end_address)
 		{
-			numberOfValues = end_address - i;
-			needsPadding = true;
+			num_coils = end_address - current_address;
+			current_byte_needs_padding = true;
 		}
 
 		//store the values from this register block
-		memcpy(boolArray, registers + i, numberOfValues);
+		memcpy(bool_array, register_data + current_address, SIZE_OF_BYTE);
 
 		//add 0/false padding to remainder of byte if needed
-		if (needsPadding)
+		if (current_byte_needs_padding)
 		{
-			for (int j = numberOfValues; j < SIZE_OF_BYTE; j++)
+			for (int padding_index = num_coils; padding_index < SIZE_OF_BYTE; padding_index++)
 			{
-				boolArray[j] = false;
+				bool_array[padding_index] = false;
 			}
 		}
 
-		//iterating through array gives us MSB. We need LSB, so we will reverse the array
-		Utils::Reverse<bool>(boolArray, SIZE_OF_BYTE);
+		//iterating through registers gives us MSB. We need LSB, so we will reverse the array
+		Utils::Reverse<bool>(bool_array, SIZE_OF_BYTE);
 
 		if (response.data != nullptr)
 		{
-			response.data[current_byte] = Utils::GetByte(boolArray); 
-			current_byte++;
+			response.data[current_byte] = Utils::GetByte(bool_array); 
 		}
+
+		current_byte++;
 	}
 
 	return response;
 }
 
+uint8_t ModbusSlave::ValidateRequest(ModbusPacket request)
+{
+	//Check for Illegal address
+	unsigned short startAddress = GetRequestStartAddress(request);
+	unsigned short size = request.GetRequestSize();
+
+	if (startAddress + size > MODBUS_REGISTER_CAPACITY)
+	{
+		return ILLEGAL_ADDRESS;
+	}
+
+	//check for illegal data value
+	//TODO MORE WORK
+
+	return OK;
+}
+
+void ModbusSlave::SetException(ModbusPacket &response, uint8_t exception_code)
+{
+	response.message_length = BASE_MESSAGE_LENGTH + EX_INFO_SZ;
+	response.function |= BAD;
+	response.data = new uint8_t[EX_INFO_SZ];
+	response.data[EXCEPTION_CODE] = exception_code;
+}
+
 void ModbusSlave::EnableZeroBasedAddressing(bool enabled)
 {
 	ZeroBasedAddressing = enabled;
+}
+
+unsigned short ModbusSlave::GetRequestStartAddress(const ModbusPacket& request)
+{
+	/*
+	With zero based addressing client will send 4 to get the 5th value.
+	0 1 2 3 [4]
+			5th value
+
+	If NOT zero based, client will send 5 to get 5th. But our data indexing is still 0 based.
+	0 1 2 3 4 [5] - we would get the 6th value, so we need to subtract 1
+	*/
+	unsigned short start_address = request.GetRequestStartAddress();
+
+	if (ZeroBasedAddressing == false)
+	{
+		start_address -= 1;
+	}
+
+	return start_address;
 }

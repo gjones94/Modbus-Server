@@ -44,13 +44,16 @@ enum STATUS : uint8_t
 
 #define HEADER_LENGTH 8
 #define BASE_MESSAGE_LENGTH 2 // UID (1 byte) + FCODE (1 byte)
+
 #define RQ_READ_INFO_SZ 4
-#define RQ_WRITE_SINGLE_INFO_SZ 2
-#define RQ_WRITE_MULTIPLE_INFO_SZ 5
+#define RQ_WRITE_INFO_SZ 2
+#define RQ_WRITES_INFO_SZ 5
 
 #define RES_READ_INFO_SZ 1 // 1 Byte representing count of bytes in response
 #define RES_WRITE_INFO_SZ 4
 #define RES_WRITES_INFO_SZ 4
+
+#define EX_INFO_SZ 1
 
 enum REQUEST : int
 {
@@ -64,6 +67,11 @@ enum REQUEST : int
 	FCODE, //included in message length count
 
 	INDEX_OF_FIRST_DATA_BYTE
+};
+
+enum EXCEPTION : int
+{
+	EXCEPTION_CODE = 0
 };
 
 /* Functions (1 - 4) */
@@ -117,6 +125,7 @@ enum RES_WRITE_MULTIPLE : int
 
 enum ErrorCodes : uint8_t
 {
+	OK = 0x00, //Custom for indicating valid request
 	ILLEGAL_FUNCTION = 0x01,
 	ILLEGAL_ADDRESS = 0x02,
 	ILLEGAL_DATA_VALUE = 0x03,
@@ -177,9 +186,9 @@ class ModbusPacket
 		static bool Serialize(const ModbusPacket& request, char* buffer);
 
 		/* Data Section Helpers*/
-		unsigned short GetRequestStartAddress(bool zeroBasedAddressing) const;
+
+		unsigned short GetRequestStartAddress() const;
 		unsigned short GetRequestSize() const;
-		unsigned short GetMessageLength() const;
 		unsigned short GetSingleWriteValue();
 
 		/* Diagnostics */

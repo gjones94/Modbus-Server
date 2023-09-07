@@ -8,25 +8,18 @@
 
 using namespace std;
 
-int Utils::NumBytesNeeded(int num_requested, size_t size_of_unit)
+int Utils::GetNumBytesRequiredForData(int num_requested, size_t size_of_unit)
 {
 	int byteLength = (uint8_t)ceil((double) (num_requested * size_of_unit) / SIZE_OF_BYTE);
 
 	return byteLength;
 }
 
-/*
-	GetByte
-	====================================================================
-	Algorithm
-	[F] T T T F T -> (array), start index 0
-	 1  0 0 0 0 0 -> IF (array[index] = True)  { OR with 1 bit on far left }
-	 0  1 0 0 0 0 -> IF (array[index] = True)  { OR with 1 bit on end shifted right by index count }
-	 0  0 1 0 0 0 -> IF (array[index] = True)  { OR with 1 bit on end shifted right by index count }
-	 ------------
-	 0  1 1 1 0 1 RESULTING BINARY
-	====================================================================
-*/
+/// <summary>
+/// Convert bool array into a byte
+/// </summary>
+/// <param name="bool* [array]"></param>
+/// <returns>uint8_t byte</returns>
 uint8_t Utils::GetByte(bool* array)
 {
 	uint8_t byte = 0;
@@ -42,6 +35,18 @@ uint8_t Utils::GetByte(bool* array)
 	}
 
 	return byte;
+	/*
+		GetByte
+		====================================================================
+		Algorithm
+		[F] T T T F T -> (array), start index 0
+		 1  0 0 0 0 0 -> IF (array[index] = True)  { OR with 1 bit on far left }
+		 0  1 0 0 0 0 -> IF (array[index] = True)  { OR with 1 bit on end shifted right by index count }
+		 0  0 1 0 0 0 -> IF (array[index] = True)  { OR with 1 bit on end shifted right by index count }
+		 ------------
+		 0  1 1 1 0 1 RESULTING BINARY
+		====================================================================
+	*/
 }
 
 template<typename T>
