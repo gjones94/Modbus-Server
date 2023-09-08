@@ -22,6 +22,7 @@ void ModbusPacket::SetNetworkByteOrder()
 ModbusPacket ModbusPacket::Deserialize(const char* in_buffer)
 {
 	ModbusPacket request;
+
 	//copy over header info
 	request.transaction_id = ntohs(MAKEWORD(in_buffer[TID_HI], in_buffer[TID_LO]));
 	request.protocol_id = ntohs(MAKEWORD(in_buffer[PID_HI], in_buffer[PID_LO]));
@@ -39,17 +40,17 @@ ModbusPacket ModbusPacket::Deserialize(const char* in_buffer)
 	return request;
 }
 
-bool ModbusPacket::Serialize(const ModbusPacket& in_packet, char* out_buffer)
+bool ModbusPacket::Serialize(const ModbusPacket& in_packet, char* serialized_buffer, int *serialized_buffer_sz)
 {
-	//TODO, test and make sure that endianess was maintained upon return
-	size_t data_size = in_packet.GetDataSize();
+	int data_size = in_packet.GetDataSize();
 
-	out_buffer = new char[HEADER_LENGTH + data_size];
+	serialized_buffer_sz = new (int) (HEADER_LENGTH + data_size);
+	serialized_buffer = new char[*serialized_buffer_sz];
 
-	if (out_buffer != nullptr)
+	if (serialized_buffer != nullptr)
 	{
-		memcpy(out_buffer, &in_packet, HEADER_LENGTH);
-		memcpy(out_buffer + INDEX_OF_FIRST_DATA_BYTE, in_packet.data, data_size);
+		memcpy(serialized_buffer, &in_packet, *serialized_buffer_sz);
+		memcpy(serialized_buffer + INDEX_OF_FIRST_DATA_BYTE, in_packet.data, data_size);
 
 		in_packet.PrintPacketBinary();
 	}

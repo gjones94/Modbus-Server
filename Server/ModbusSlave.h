@@ -47,7 +47,7 @@ class ModbusSlave : public BaseServer<ModbusPacket>
 		/// <returns>uint8_t [OK] if valid, [EXCEPTION_CODE] if invalid</returns>
 		uint8_t ValidateRequest(ModbusPacket request);
 
-		void SetException(ModbusPacket &response, uint8_t exception_code);
+		void SetException(ModbusPacket &response, uint8_t result);
 		
 		/* Base Server override */
 		bool ReceiveAndRespond(SOCKET socket) override;

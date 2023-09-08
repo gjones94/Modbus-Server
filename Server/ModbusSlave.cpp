@@ -43,6 +43,7 @@ void ModbusSlave::InitializeRegisters()
 	status_registers[17] = true;
 	status_registers[18] = true;
 	status_registers[19] = true;
+	status_registers[19] = true;
 }
 
 void ModbusSlave::Start()
@@ -60,6 +61,13 @@ bool ModbusSlave::ReceiveAndRespond(SOCKET socket)
 	request = ModbusPacket::Deserialize(buffer);
 
 	response = GetResponse(request);
+
+	char *serialized_buffer = 0;
+	int serialize_buffer_sz = 0;
+
+	bool success = ModbusPacket::Serialize(response, serialized_buffer, &serialize_buffer_sz);
+
+	int bytesSent = send(socket, &serialized_buffer, serialize_buffer_sz, 0);
 
 	return true;
 }
@@ -103,20 +111,6 @@ ModbusPacket ModbusSlave::GetResponse(const ModbusPacket request)
 			break;
 	}
 
-	response.transaction_id = request.transaction_id;
-	response.protocol_id = request.protocol_id;
-	response.unit_id = request.unit_id;
-	response.function = request.function;
-
-	response.PrintPacketBinary();
-	response.SetNetworkByteOrder();
-	response.PrintPacketBinary();
-
-	//for (int i = 0; i < response.message_length - 2; i++)
-	//{
-	//	Utils::PrintBinary<uint8_t>(response.data[i]);
-	//}
-	
 	return response;
 }
 
@@ -169,67 +163,69 @@ ModbusPacket ModbusSlave::ReadCoilStatusRegisters(bool* register_data, const Mod
 	response.function = request.function;
 
 	//Validate Request
-	uint8_t exception_code = ValidateRequest(request);
-	if (exception_code != OK)
+	uint8_t result = ValidateRequest(request);
+	if (result == OK)
 	{
-		SetException(response, exception_code);
-		return response;
-	}
+		//Obtain requested data
+		unsigned short start_address = GetRequestStartAddress(request);
+		unsigned short request_size = request.GetRequestSize();
 
-	//Obtain requested data
-	unsigned short start_address = GetRequestStartAddress(request);
-	unsigned short request_size = request.GetRequestSize(); 
+		int byte_count = Utils::GetNumBytesRequiredForData(request_size, BITS_PER_COIL);
+		int data_block_size = RES_READ_INFO_SZ + byte_count;
+		response.data = new uint8_t[data_block_size];
 
-	int byte_count = Utils::GetNumBytesRequiredForData(request_size, BITS_PER_COIL);
-
-	if (byte_count <= 0)
-	{
-		SetException(response, ILLEGAL_DATA_VALUE); //requested no data
-		return response;
-	}
-
-	int data_block_size = RES_READ_INFO_SZ + byte_count;
-	response.data = new uint8_t[data_block_size];
-	response.data[RES_READ_BYTE_COUNT] = byte_count;
-	response.message_length = BASE_MESSAGE_LENGTH + data_block_size;
-
-	bool bool_array[SIZE_OF_BYTE];
-	bool current_byte_needs_padding = false;
-	int current_byte = 1;
-	int end_address = start_address + request_size;
-
-	for (int current_address = start_address; current_address < end_address; current_address += SIZE_OF_BYTE)
-	{
-		int num_coils = SIZE_OF_BYTE;
-
-		//if next coil block exceeds total size requested, minimize acquisition to the request size
-		if ((current_address + SIZE_OF_BYTE) > end_address)
+		if (response.data != nullptr) 
 		{
-			num_coils = end_address - current_address;
-			current_byte_needs_padding = true;
-		}
+			response.data[RES_READ_BYTE_COUNT] = byte_count;
+			response.message_length = BASE_MESSAGE_LENGTH + data_block_size;
 
-		//store the values from this register block
-		memcpy(bool_array, register_data + current_address, SIZE_OF_BYTE);
+			bool bool_array[SIZE_OF_BYTE];
+			bool current_byte_needs_padding = false;
+			int current_byte = 1;
+			int end_address = start_address + request_size;
 
-		//add 0/false padding to remainder of byte if needed
-		if (current_byte_needs_padding)
-		{
-			for (int padding_index = num_coils; padding_index < SIZE_OF_BYTE; padding_index++)
+			for (int current_address = start_address; current_address < end_address; current_address += SIZE_OF_BYTE)
 			{
-				bool_array[padding_index] = false;
+				int num_coils = SIZE_OF_BYTE;
+
+				//if next coil block exceeds total size requested, minimize acquisition to the request size
+				if ((current_address + SIZE_OF_BYTE) > end_address)
+				{
+					num_coils = end_address - current_address;
+					current_byte_needs_padding = true;
+				}
+
+				//store the values from this register block
+				memcpy(bool_array, register_data + current_address, num_coils);
+
+				//add 0/false padding to remainder of byte if needed
+				if (current_byte_needs_padding)
+				{
+					for (int padding_index = num_coils; padding_index < SIZE_OF_BYTE; padding_index++)
+					{
+						bool_array[padding_index] = false;
+					}
+				}
+
+				//iterating through registers gives us MSB. We need LSB, so we will reverse the array
+				Utils::Reverse<bool>(bool_array, SIZE_OF_BYTE);
+
+				if (current_byte <= (data_block_size - 1))
+				{
+					response.data[current_byte] = Utils::GetByte(bool_array);
+				}
+
+				current_byte++;
 			}
 		}
-
-		//iterating through registers gives us MSB. We need LSB, so we will reverse the array
-		Utils::Reverse<bool>(bool_array, SIZE_OF_BYTE);
-
-		if (response.data != nullptr)
+		else //out of memory
 		{
-			response.data[current_byte] = Utils::GetByte(bool_array); 
+			SetException(response, SLAVE_DEVICE_FAILURE);
 		}
-
-		current_byte++;
+	}
+	else 
+	{
+		SetException(response, result);
 	}
 
 	return response;
@@ -247,17 +243,17 @@ uint8_t ModbusSlave::ValidateRequest(ModbusPacket request)
 	}
 
 	//check for illegal data value
-	//TODO MORE WORK
+	//TODO MORE Validation
 
 	return OK;
 }
 
-void ModbusSlave::SetException(ModbusPacket &response, uint8_t exception_code)
+void ModbusSlave::SetException(ModbusPacket &response, uint8_t result)
 {
 	response.message_length = BASE_MESSAGE_LENGTH + EX_INFO_SZ;
 	response.function |= BAD;
 	response.data = new uint8_t[EX_INFO_SZ];
-	response.data[EXCEPTION_CODE] = exception_code;
+	response.data[EXCEPTION_CODE] = result;
 }
 
 void ModbusSlave::EnableZeroBasedAddressing(bool enabled)

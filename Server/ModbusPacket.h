@@ -183,7 +183,7 @@ class ModbusPacket
 
 		/* Initializers */
 		static ModbusPacket Deserialize(const char *buffer);
-		static bool Serialize(const ModbusPacket& request, char* buffer);
+		static bool Serialize(const ModbusPacket& in_packet, char* serialized_buffer, int *serialized_buffer_sz);
 
 		/* Data Section Helpers*/
 
@@ -249,6 +249,8 @@ class ModbusPacket
 					data[i] = other.data[i];
 				}
 			}
+
+			byte_format = other.byte_format;
 
 			return *this;
 		}
