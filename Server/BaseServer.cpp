@@ -240,13 +240,15 @@ template <typename T> bool BaseServer<T>::ReceiveAndRespond(SOCKET socket)
     char buffer[BUFFER_SIZE];
 
     int bytesReceived = recv(socket, (char*) buffer, BUFFER_SIZE, 0);
-    if (bytesReceived <= SOCKET_ERROR)
+
+    if (bytesReceived <= 0)
     {
         return false;
     }
 
     int bytesSent = send(socket, (char*) buffer, BUFFER_SIZE, 0);
-    if (bytesSent <= SOCKET_ERROR)
+
+    if (bytesSent <= 0)
     {
         return false;
     }

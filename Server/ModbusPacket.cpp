@@ -31,8 +31,8 @@ ModbusPacket ModbusPacket::Deserialize(const char* in_buffer)
 	request.function = in_buffer[FCODE];
 
 	//allocate and copy over data section
-	int data_size = request.GetDataSize();
-	request.data = new uint8_t[data_size];
+	int data_size = request.GetSizeOfDataSection();
+	request.data = new byte[data_size];
 	memcpy(request.data, in_buffer + INDEX_OF_FIRST_DATA_BYTE, data_size);
 
 	request.byte_format = LSB; //This is default, but explicitly noting this
@@ -40,22 +40,20 @@ ModbusPacket ModbusPacket::Deserialize(const char* in_buffer)
 	return request;
 }
 
-bool ModbusPacket::Serialize(const ModbusPacket& in_packet, char* serialized_buffer, int *serialized_buffer_sz)
+char* ModbusPacket::Serialize(const ModbusPacket& in_packet, int *serialized_buffer_sz)
 {
-	int data_size = in_packet.GetDataSize();
+	int data_size = in_packet.GetSizeOfDataSection();
 
-	serialized_buffer_sz = new (int) (HEADER_LENGTH + data_size);
-	serialized_buffer = new char[*serialized_buffer_sz];
+	*serialized_buffer_sz = HEADER_LENGTH + data_size;
+	char* serialized_buffer = new char[*serialized_buffer_sz];
 
 	if (serialized_buffer != nullptr)
 	{
 		memcpy(serialized_buffer, &in_packet, *serialized_buffer_sz);
 		memcpy(serialized_buffer + INDEX_OF_FIRST_DATA_BYTE, in_packet.data, data_size);
-
-		in_packet.PrintPacketBinary();
 	}
 
-	return true;
+	return serialized_buffer;
 }
 
 unsigned short ModbusPacket::GetRequestStartAddress() const
@@ -71,24 +69,11 @@ unsigned short ModbusPacket::GetRequestSize() const
 	return size;
 }
 
-unsigned short ModbusPacket::GetSingleWriteValue()
+unsigned short ModbusPacket::GetRequestWriteValue()
 {
 	unsigned short value = ntohs(MAKEWORD(data[RQ_WRITE_VALUE_HI], data[RQ_WRITE_VALUE_LO]));
 
 	return value;
-}
-
-
-void ModbusPacket::PrintHeader()
-{
-	cout << endl;
-	cout << "=======Request Header Data=======" << endl;
-	cout << "TransactionId: " << (byte_format == MSB ? ntohs(transaction_id) : transaction_id) << endl;
-	cout << "ProtocolId: " << (byte_format == MSB ? ntohs(protocol_id) : protocol_id) << endl;
-	cout << "MessageLength: " << (byte_format == MSB ? ntohs(message_length) : message_length) << endl;
-	cout << "UnitId: " << (int) unit_id << endl;
-	cout << "=================================" << endl;
-	cout << endl;
 }
 
 void ModbusPacket::PrintPacketBinary() const
@@ -127,8 +112,7 @@ void ModbusPacket::PrintPacketBinary() const
 	cout << "Data" << endl;
 
 
-	int data_size = GetDataSize();
-
+	int data_size = GetSizeOfDataSection();
 
 	for (int i = 0; i < data_size; i++)
 	{
@@ -139,7 +123,7 @@ void ModbusPacket::PrintPacketBinary() const
 	cout << endl << "===================================" << endl;
 }
 
-int ModbusPacket::GetDataSize() const
+int ModbusPacket::GetSizeOfDataSection() const
 {
 	int data_size;
 

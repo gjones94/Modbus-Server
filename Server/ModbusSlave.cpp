@@ -54,20 +54,28 @@ void ModbusSlave::Start()
 bool ModbusSlave::ReceiveAndRespond(SOCKET socket)
 {
 	char buffer[BUFFER_SIZE];
+
 	int bytesReceived = recv(socket, (char*)buffer, BUFFER_SIZE, 0);
-	ModbusPacket request;
-	ModbusPacket response; 
 
-	request = ModbusPacket::Deserialize(buffer);
+	if (bytesReceived <= 0)
+	{
+		return false;
+	}
 
-	response = GetResponse(request);
+	ModbusPacket request = ModbusPacket::Deserialize(buffer);
 
-	char *serialized_buffer = 0;
+	ModbusPacket response = GetResponse(request);
+
+	response.SetNetworkByteOrder();
 	int serialize_buffer_sz = 0;
+	char *serialized_buffer = ModbusPacket::Serialize(response, &serialize_buffer_sz);
 
-	bool success = ModbusPacket::Serialize(response, serialized_buffer, &serialize_buffer_sz);
+	int bytes_sent = send(socket, serialized_buffer, serialize_buffer_sz, 0);
 
-	int bytesSent = send(socket, &serialized_buffer, serialize_buffer_sz, 0);
+	if (bytes_sent <= 0)
+	{
+		return false;
+	}
 
 	return true;
 }
@@ -163,7 +171,7 @@ ModbusPacket ModbusSlave::ReadCoilStatusRegisters(bool* register_data, const Mod
 	response.function = request.function;
 
 	//Validate Request
-	uint8_t result = ValidateRequest(request);
+	byte result = ValidateRequest(request);
 	if (result == OK)
 	{
 		//Obtain requested data
@@ -172,7 +180,7 @@ ModbusPacket ModbusSlave::ReadCoilStatusRegisters(bool* register_data, const Mod
 
 		int byte_count = Utils::GetNumBytesRequiredForData(request_size, BITS_PER_COIL);
 		int data_block_size = RES_READ_INFO_SZ + byte_count;
-		response.data = new uint8_t[data_block_size];
+		response.data = new byte[data_block_size];
 
 		if (response.data != nullptr) 
 		{
@@ -231,7 +239,7 @@ ModbusPacket ModbusSlave::ReadCoilStatusRegisters(bool* register_data, const Mod
 	return response;
 }
 
-uint8_t ModbusSlave::ValidateRequest(ModbusPacket request)
+byte ModbusSlave::ValidateRequest(ModbusPacket request)
 {
 	//Check for Illegal address
 	unsigned short startAddress = GetRequestStartAddress(request);
@@ -248,11 +256,11 @@ uint8_t ModbusSlave::ValidateRequest(ModbusPacket request)
 	return OK;
 }
 
-void ModbusSlave::SetException(ModbusPacket &response, uint8_t result)
+void ModbusSlave::SetException(ModbusPacket &response, byte result)
 {
 	response.message_length = BASE_MESSAGE_LENGTH + EX_INFO_SZ;
 	response.function |= BAD;
-	response.data = new uint8_t[EX_INFO_SZ];
+	response.data = new byte[EX_INFO_SZ];
 	response.data[EXCEPTION_CODE] = result;
 }
 

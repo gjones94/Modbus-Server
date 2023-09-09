@@ -36,10 +36,7 @@ class ModbusSlave : public BaseServer<ModbusPacket>
 		unsigned short GetRequestStartAddress(const ModbusPacket &request);
 		size_t GetSendBufferSize(const ModbusPacket* sendData);
 
-		/* Read/Write Methods */
-		ModbusPacket ReadCoilStatusRegisters(bool* registers, const ModbusPacket& request);
-
-
+		/* Request */
 		/// <summary>
 		/// Validates request information
 		/// </summary>
@@ -47,10 +44,24 @@ class ModbusSlave : public BaseServer<ModbusPacket>
 		/// <returns>uint8_t [OK] if valid, [EXCEPTION_CODE] if invalid</returns>
 		uint8_t ValidateRequest(ModbusPacket request);
 
-		void SetException(ModbusPacket &response, uint8_t result);
-		
-		/* Base Server override */
-		bool ReceiveAndRespond(SOCKET socket) override;
+		/// <summary>
+		/// Reads coil and input status registers
+		/// </summary>
+		/// <param name="bool* [registers]"></param>
+		/// <param name="ModbusPacket [request]"></param>
+		/// <returns></returns>
+		ModbusPacket ReadCoilStatusRegisters(bool* registers, const ModbusPacket& request);
+
+		/* Response */
 		ModbusPacket GetResponse(const ModbusPacket requestData);
+
+		void SetException(ModbusPacket &response, byte result);
+
+		/// <summary>
+		///	Receive data from client and respond to client
+		/// </summary>
+		/// <param name="SOCKET [socket]"></param>
+		/// <returns>boolean representing success or failure</returns>
+		bool ReceiveAndRespond(SOCKET socket) override;
 };
 
