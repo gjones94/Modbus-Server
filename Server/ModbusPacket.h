@@ -12,20 +12,23 @@ using namespace std;
 	REQUESTS
 	--------
 	All TCP Request Packets have the following structure to start:
-	- uint8_t Slave Address
-	- uint8_t Function Code
-	- uint16_t Starting Data Address
+	- ushort Transaction ID
+	- ushort Protocol ID
+	- ushort Message Length
+	- byte Unit ID
+	- byte Function Code
+	- ushort Starting Data Address
 	
 	After this, there are some differences between read, write, and multiple write
 	Read (Function 1 - 4):
-	- uint16_t Size Requested
+	- ushort Size Requested
 	
 	Write (single) (Function 5 & 6):
-	- uint16_t Value to write
+	- ushort Value to write
 
 	Write Multiple (Function 15 & 16):
-	- uint16_t Number Coils/Registers Requested
-	- uint8_t Number of BYTES to follow (Calculated based on 8 coils per byte or 2 bytes per register)
+	- ushort Number Coils/Registers Requested
+	- byte Number of BYTES to follow (Calculated based on 8 coils per byte or 2 bytes per register)
 	--------
 
 	RESPONSES
@@ -35,10 +38,10 @@ using namespace std;
 	---------
 */
 
-enum STATUS : uint8_t
+enum STATUS : byte
 {
 	/* Bit masks for function code */
-	GOOD = 0xFF, /* &= returns the same value */
+	GOOD = 0x00, /* |= returns the same value */
 	BAD = 0x80, /* |= sets the far left bit for error */
 };
 
@@ -51,8 +54,8 @@ enum REQUEST : int
 	TID_LO,
 	PID_HI,
 	PID_LO,
-	LEN_HI,
-	LEN_LO,
+	LEN_HI, //(Remaining Bytes in message)
+	LEN_LO, // ^
 	UID,
 	/* End Header */
 
@@ -63,7 +66,7 @@ enum REQUEST : int
 };
 
 #define EX_INFO_SZ 1
-enum EXCEPTION : int
+enum Exception : int
 {
 	EXCEPTION_CODE = 0
 };
@@ -125,7 +128,7 @@ enum RES_WRITES : int
 
 enum EXCEPTION_CODES : uint8_t
 {
-	OK = 0x00, //Custom for indicating valid request
+	OK = 0x00,
 	ILLEGAL_FUNCTION = 0x01,
 	ILLEGAL_ADDRESS = 0x02,
 	ILLEGAL_DATA_VALUE = 0x03,
@@ -150,7 +153,7 @@ enum FUNCTION_CODES : uint8_t
 	WRITE_MULTIPLE_REGISTERS = 0x10
 };
 
-enum COIL_INPUT_STATUS : uint8_t
+enum COIL_INPUT_STATUS : byte
 {
 	ON_HI = 0xFF,
 	ON_LO = 0x00,
@@ -158,7 +161,7 @@ enum COIL_INPUT_STATUS : uint8_t
 	OFF_LO = 0x00
 };
 
-enum ENDIAN : uint8_t
+enum BYTE_ORDER : byte
 {
 	MSB,
 	LSB
@@ -184,7 +187,7 @@ class ModbusPacket
 
 		/* Initializers */
 		static ModbusPacket Deserialize(const char *buffer);
-		static char* Serialize(const ModbusPacket& in_packet, int *serialized_buffer_sz);
+		static byte* Serialize(const ModbusPacket& in_packet);
 
 		/* PDU Data Section Helpers*/
 		unsigned short GetRequestStartAddress() const;
@@ -203,7 +206,7 @@ class ModbusPacket
 			function = 0;
 			data = nullptr;
 
-			byte_format = LSB;
+			byte_order = LSB;
 		};
 
 		//Copy constructor
@@ -223,7 +226,7 @@ class ModbusPacket
 				data[i] = other.data[i];
 			}
 
-			byte_format = other.byte_format;
+			byte_order = other.byte_order;
 		}
 
 		//Assignment constructor
@@ -247,7 +250,7 @@ class ModbusPacket
 				}
 			}
 
-			byte_format = other.byte_format;
+			byte_order = other.byte_order;
 
 			return *this;
 		}
@@ -260,7 +263,7 @@ class ModbusPacket
 		}
 
 	private:
-		ENDIAN byte_format;
+		BYTE_ORDER byte_order;
 
 		//helper to obtain data size from message length field
 		int GetSizeOfDataSection() const;

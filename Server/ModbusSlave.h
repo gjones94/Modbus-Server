@@ -10,6 +10,20 @@
 #define BITS_PER_REG 16
 #define ERROR_FLAG 0b10000000
 
+typedef struct ResponseData
+{
+	byte* data;
+	int size;
+	byte status;
+
+} ResponseData;
+
+typedef struct SerializedBuffer
+{
+	byte* buffer;
+	int buffer_sz;
+
+} SerializedBuffer;
 
 
 class ModbusSlave : public BaseServer<ModbusPacket>
@@ -34,7 +48,6 @@ class ModbusSlave : public BaseServer<ModbusPacket>
 
 		/* Helpers */
 		unsigned short GetRequestStartAddress(const ModbusPacket &request);
-		size_t GetSendBufferSize(const ModbusPacket* sendData);
 
 		/* Request */
 		/// <summary>
@@ -50,10 +63,10 @@ class ModbusSlave : public BaseServer<ModbusPacket>
 		/// <param name="bool* [registers]"></param>
 		/// <param name="ModbusPacket [request]"></param>
 		/// <returns></returns>
-		ModbusPacket ReadCoilStatusRegisters(bool* registers, const ModbusPacket& request);
+		ResponseData* ReadCoilStatusRegisters(bool* registers, int startAddress, int size);
 
 		/* Response */
-		ModbusPacket GetResponse(const ModbusPacket requestData);
+		SerializedBuffer* GetResponse(const char* request);
 
 		void SetException(ModbusPacket &response, byte result);
 

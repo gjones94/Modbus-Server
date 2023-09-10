@@ -1,4 +1,3 @@
-
 #include "ModbusPacket.h"
 
 void ModbusPacket::SetHostByteOrder()
@@ -7,7 +6,7 @@ void ModbusPacket::SetHostByteOrder()
 	protocol_id = ntohs(protocol_id);
 	message_length = ntohs(message_length);
 
-	byte_format = LSB;
+	byte_order = LSB;
 }
 
 void ModbusPacket::SetNetworkByteOrder()
@@ -16,7 +15,7 @@ void ModbusPacket::SetNetworkByteOrder()
 	protocol_id = htons(protocol_id);
 	message_length = htons(message_length);
 
-	byte_format = MSB;
+	byte_order = MSB;
 }
 
 ModbusPacket ModbusPacket::Deserialize(const char* in_buffer)
@@ -35,21 +34,22 @@ ModbusPacket ModbusPacket::Deserialize(const char* in_buffer)
 	request.data = new byte[data_size];
 	memcpy(request.data, in_buffer + INDEX_OF_FIRST_DATA_BYTE, data_size);
 
-	request.byte_format = LSB; //This is default, but explicitly noting this
+	request.byte_order = LSB; //This is default, but explicitly noting this
 
 	return request;
 }
 
-char* ModbusPacket::Serialize(const ModbusPacket& in_packet, int *serialized_buffer_sz)
+byte* ModbusPacket::Serialize(const ModbusPacket& in_packet)
 {
+	int base_size = HEADER_LENGTH + 1;
 	int data_size = in_packet.GetSizeOfDataSection();
+	int total_size = base_size + data_size;
 
-	*serialized_buffer_sz = HEADER_LENGTH + data_size;
-	char* serialized_buffer = new char[*serialized_buffer_sz];
+	byte* serialized_buffer = new byte[total_size];
 
 	if (serialized_buffer != nullptr)
 	{
-		memcpy(serialized_buffer, &in_packet, *serialized_buffer_sz);
+		memcpy(serialized_buffer, &in_packet, HEADER_LENGTH);
 		memcpy(serialized_buffer + INDEX_OF_FIRST_DATA_BYTE, in_packet.data, data_size);
 	}
 
@@ -127,7 +127,7 @@ int ModbusPacket::GetSizeOfDataSection() const
 {
 	int data_size;
 
-	if (byte_format == MSB)
+	if (byte_order == MSB)
 	{
 		//swap byte order for host machine
 		data_size = ntohs(message_length) - BASE_MESSAGE_LENGTH;

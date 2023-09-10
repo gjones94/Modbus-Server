@@ -32,6 +32,8 @@ enum ClientConnectionState
 	CLOSED
 };
 
+
+
 typedef struct ClientConnection
 {
 	int client_id;
@@ -133,5 +135,4 @@ class BaseServer
 		/// <param name="sockaddr_in [ip_address]"></param>
 		/// <returns>char* [IP Address]</returns>
 		char* GetIPAddress(sockaddr_in ip_address);
-
 };
