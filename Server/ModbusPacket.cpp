@@ -76,6 +76,16 @@ unsigned short ModbusPacket::GetRequestWriteValue()
 	return value;
 }
 
+int ModbusPacket::GetPacketSize() const
+{
+	int t_size = sizeof(transaction_id);
+	int p_size = sizeof(protocol_id);
+	int m_size = sizeof(message_length);
+	int data_size = GetSizeOfDataSection();
+
+	return t_size + p_size + m_size + data_size;
+}
+
 void ModbusPacket::PrintPacketBinary() const
 {
 	cout << "============PACKET DATA============" << endl;

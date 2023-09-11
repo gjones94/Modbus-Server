@@ -32,7 +32,12 @@ enum ClientConnectionState
 	CLOSED
 };
 
+typedef struct SendBuffer
+{
+	byte* buffer;
+	int buffer_sz;
 
+} SendBuffer;
 
 typedef struct ClientConnection
 {
@@ -76,7 +81,7 @@ class BaseServer
 		WSAData wsa_data;
 		WORD version;
 		SOCKET server_socket;
-		unsigned short port;
+		unsigned short server_port;
 		unsigned short client_count;
 		vector<ClientConnectionHandler*> client_connection_handlers;
 
@@ -122,12 +127,14 @@ class BaseServer
 		/// <param name="data"></param>
 		void HandleClient(ClientConnection *data);
 
+		bool ReceiveAndRespond(SOCKET socket);
+
 		/// <summary>
 		/// Receive request and send response
 		/// </summary>
 		/// <param name="SOCKET [socket]"></param>
 		/// <returns></returns>
-		virtual bool ReceiveAndRespond(SOCKET socket);
+		virtual SendBuffer* GetResponse(const char* recv_buffer, int buffer_size_bytes);
 
 		/// <summary>
 		/// Get IP Address string representation of sockaddr_in structure

@@ -10,6 +10,14 @@
 #define BITS_PER_REG 16
 #define ERROR_FLAG 0b10000000
 
+enum REGISTER_TYPE : byte
+{
+	COIL_OUTPUT = 0,
+	DISCRETE_INPUT = 1,
+	INPUT_REGISTER = 3,
+	HOLDING_REGISTER = 4
+};
+
 typedef struct ResponseData
 {
 	byte* data;
@@ -18,63 +26,48 @@ typedef struct ResponseData
 
 } ResponseData;
 
-typedef struct SerializedBuffer
-{
-	byte* buffer;
-	int buffer_sz;
-
-} SerializedBuffer;
-
-
 class ModbusSlave : public BaseServer<ModbusPacket>
 {
-	public:
-		ModbusSlave(int port);
-		void Start();
+public:
+	ModbusSlave(int port);
+	void Start();
 
-	private:
-		/* Memory Blocks */
-		bool* coil_registers; //65536
-		bool* status_registers; //65536
-		unsigned short* input_registers; //4096
-		unsigned short* holding_registers; //4096
+private:
+	/* Memory Blocks */
+	bool* coil_outputs; //65536
+	bool* input_statuses; //65536
+	unsigned short* input_registers; //4096
+	unsigned short* holding_registers; //4096
 
-		/* Options */
-		bool ZeroBasedAddressing;
+	/* Options */
+	bool ZeroBasedAddressing;
 
-		/* Initialization */
-		void InitializeRegisters();
-		void EnableZeroBasedAddressing(bool enabled);
+	/* Initialization */
+	void InitializeRegisters();
+	void EnableZeroBasedAddressing(bool enabled);
 
-		/* Helpers */
-		unsigned short GetRequestStartAddress(const ModbusPacket &request);
+	/* Helpers */
+	unsigned short GetRequestStartAddress(const ModbusPacket& request);
+	void* GetRegisterBlock(byte registerType);
 
-		/* Request */
-		/// <summary>
-		/// Validates request information
-		/// </summary>
-		/// <param name="ModbusPacket [request]"></param>
-		/// <returns>uint8_t [OK] if valid, [EXCEPTION_CODE] if invalid</returns>
-		uint8_t ValidateRequest(ModbusPacket request);
+	/* Request */
+	/// <summary>
+	/// Validates request information
+	/// </summary>
+	/// <param name="ModbusPacket [request]"></param>
+	/// <returns>byte [OK] if valid, [EXCEPTION_CODE] if invalid</returns>
+	byte ValidateRequest(ModbusPacket request);
 
-		/// <summary>
-		/// Reads coil and input status registers
-		/// </summary>
-		/// <param name="bool* [registers]"></param>
-		/// <param name="ModbusPacket [request]"></param>
-		/// <returns></returns>
-		ResponseData* ReadCoilStatusRegisters(bool* registers, int startAddress, int size);
+	/// <summary>
+	/// Reads coil and input status registers
+	/// </summary>
+	/// <param name="bool* [registers]"></param>
+	/// <param name="ModbusPacket [request]"></param>
+	/// <returns></returns>
+	ResponseData* ReadStatus(byte registerType, int startAddress, int size);
 
-		/* Response */
-		SerializedBuffer* GetResponse(const char* request);
+	/* Response */
+	SendBuffer* GetResponse(const char* request, int request_size) override;
 
-		void SetException(ModbusPacket &response, byte result);
-
-		/// <summary>
-		///	Receive data from client and respond to client
-		/// </summary>
-		/// <param name="SOCKET [socket]"></param>
-		/// <returns>boolean representing success or failure</returns>
-		bool ReceiveAndRespond(SOCKET socket) override;
+	void SetException(ModbusPacket& response, byte result);
 };
-

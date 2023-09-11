@@ -194,6 +194,9 @@ class ModbusPacket
 		unsigned short GetRequestSize() const;
 		unsigned short GetRequestWriteValue();
 
+		/* Helpers */
+		int GetPacketSize() const;
+
 		/* Diagnostics */
 		void PrintPacketBinary() const;
 

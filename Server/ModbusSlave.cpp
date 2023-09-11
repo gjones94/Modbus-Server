@@ -11,49 +11,26 @@ ModbusSlave::ModbusSlave(int port)
 
 void ModbusSlave::InitializeRegisters()
 {
-	coil_registers = new bool[MODBUS_REGISTER_CAPACITY];
-	status_registers = new bool[MODBUS_REGISTER_CAPACITY];
+	coil_outputs = new bool[MODBUS_REGISTER_CAPACITY];
+	input_statuses = new bool[MODBUS_REGISTER_CAPACITY];
 	input_registers = new unsigned short[MODBUS_REGISTER_CAPACITY];
 	holding_registers = new unsigned short[MODBUS_REGISTER_CAPACITY];
 
-	memset(coil_registers, 0, MODBUS_REGISTER_CAPACITY);
-	memset(status_registers, 0, MODBUS_REGISTER_CAPACITY);
+	memset(coil_outputs, 0, MODBUS_REGISTER_CAPACITY);
+	memset(input_statuses, 0, MODBUS_REGISTER_CAPACITY);
 	memset(input_registers, 0, MODBUS_REGISTER_CAPACITY);
 	memset(holding_registers, 0, MODBUS_REGISTER_CAPACITY);
 
-	status_registers[0] = true;
-	status_registers[1] = true;
-	status_registers[2] = true;
-	status_registers[3] = true;
+	input_statuses[0] = true;
+	input_statuses[1] = true;
+	input_statuses[2] = true;
+	input_statuses[3] = true;
 
 }
 
 void ModbusSlave::Start()
 {
 	BaseServer::Start();
-}
-
-bool ModbusSlave::ReceiveAndRespond(SOCKET socket)
-{
-	char buffer[BUFFER_SIZE];
-
-	int bytesReceived = recv(socket, (char*)buffer, BUFFER_SIZE, 0);
-
-	if (bytesReceived <= 0)
-	{
-		return false;
-	}
-
-	SerializedBuffer* send_buffer = GetResponse(buffer);
-
-	int bytes_sent = send(socket, (char*) send_buffer->buffer, send_buffer->buffer_sz, 0);
-
-	if (bytes_sent <= 0)
-	{
-		return false;
-	}
-
-	return true;
 }
 
 /*
@@ -64,7 +41,7 @@ bool ModbusSlave::ReceiveAndRespond(SOCKET socket)
 	3) Data Requested (Functions 1-4) // Data Value Written (Functions 5, 6) // # Written (Functions 15, 16)
 	====================================================================
 */
-SerializedBuffer* ModbusSlave::GetResponse(const char* request_buffer) //TODO override
+SendBuffer* ModbusSlave::GetResponse(const char* request_buffer, int buffer_size_bytes) //TODO override
 {
 	ModbusPacket request = ModbusPacket::Deserialize(request_buffer);
 	ModbusPacket response;
@@ -75,10 +52,10 @@ SerializedBuffer* ModbusSlave::GetResponse(const char* request_buffer) //TODO ov
 	switch (request.function)
 	{
 		case READ_COILS:
-			response_data = ReadCoilStatusRegisters(coil_registers, start_address, size);
+			response_data = ReadStatus(COIL_OUTPUT, start_address, size);
 			break;
 		case READ_INPUTS:
-			response_data =	ReadCoilStatusRegisters(status_registers, start_address, size);
+			response_data =	ReadStatus(DISCRETE_INPUT, start_address, size);
 			break;
 		case READ_HOLDING_REGISTERS:
 			//responseData = Read(HOLDING_REGISTER, &request);
@@ -111,12 +88,13 @@ SerializedBuffer* ModbusSlave::GetResponse(const char* request_buffer) //TODO ov
 		response.function |= BAD;
 	}
 	
+	int packet_size = request.GetPacketSize();
 	response.SetNetworkByteOrder();
-	byte* serialized_response = ModbusPacket::Serialize(response);
 
-	SerializedBuffer* serialized_buffer = new SerializedBuffer;
+	byte* serialized_response = ModbusPacket::Serialize(response);
+	SendBuffer* serialized_buffer = new SendBuffer;
 	serialized_buffer->buffer = serialized_response;
-	serialized_buffer->buffer_sz = response.message_length + 6;
+	serialized_buffer->buffer_sz = packet_size;
 
 	return serialized_buffer;
 }
@@ -142,9 +120,9 @@ SerializedBuffer* ModbusSlave::GetResponse(const char* request_buffer) //TODO ov
 		 will be padded with zeros
 	====================================================================
 */
-ResponseData* ModbusSlave::ReadCoilStatusRegisters(bool* register_data, int startAddress, int size)
+ResponseData* ModbusSlave::ReadStatus(byte registerType, int startAddress, int size)
 {
-	//Obtain requested data
+	bool* register_data = (bool*) GetRegisterBlock(registerType);
 	int byte_count = Utils::GetNumBytesRequiredForData(size, BITS_PER_COIL);
 
 	ResponseData* response_data = new ResponseData;
@@ -252,4 +230,21 @@ unsigned short ModbusSlave::GetRequestStartAddress(const ModbusPacket& request)
 	}
 
 	return start_address;
+}
+
+void* ModbusSlave::GetRegisterBlock(byte registerType)
+{
+	switch (registerType)
+	{
+		case COIL_OUTPUT:
+			return (void*)coil_outputs;
+		case DISCRETE_INPUT:
+			return (void*)input_statuses;
+		case INPUT_REGISTER:
+			return (void*)input_registers;
+		case HOLDING_REGISTER:
+			return (void*)holding_registers;
+		default:
+			return nullptr;
+	}
 }
