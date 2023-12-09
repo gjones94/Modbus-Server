@@ -66,6 +66,8 @@ private:
 	/// <returns></returns>
 	ResponseData* ReadStatus(byte registerType, int startAddress, int size);
 
+	ResponseData* ReadRegister(byte registerType, int startAddress, int size);
+
 	/* Response */
 	SendBuffer* GetResponse(const char* request, int request_size) override;
 

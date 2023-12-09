@@ -41,7 +41,7 @@ void ModbusSlave::Start()
 	3) Data Requested (Functions 1-4) // Data Value Written (Functions 5, 6) // # Written (Functions 15, 16)
 	====================================================================
 */
-SendBuffer* ModbusSlave::GetResponse(const char* request_buffer, int buffer_size_bytes) //TODO override
+SendBuffer* ModbusSlave::GetResponse(const char* request_buffer, int buffer_size_bytes)
 {
 	ModbusPacket request = ModbusPacket::Deserialize(request_buffer);
 	ModbusPacket response;
@@ -58,7 +58,7 @@ SendBuffer* ModbusSlave::GetResponse(const char* request_buffer, int buffer_size
 			response_data =	ReadStatus(DISCRETE_INPUT, start_address, size);
 			break;
 		case READ_HOLDING_REGISTERS:
-			//responseData = Read(HOLDING_REGISTER, &request);
+			//responseData = ReadRegister(HOLDING_REGISTER, &request);
 			break;
 		case READ_INPUT_REGISTERS:
 			//responseData = Read(INPUT_REGISTER, &request);
@@ -182,6 +182,30 @@ ResponseData* ModbusSlave::ReadStatus(byte registerType, int startAddress, int s
 	return response_data;
 }
 
+ResponseData* ModbusSlave::ReadRegister(byte registerType, int startAddress, int size)
+{
+	unsigned short* register_data = (unsigned short*) GetRegisterBlock(registerType);
+	int byte_count = Utils::GetNumBytesRequiredForData(size, BYTES_PER_REG);
+
+	ResponseData* response_data = new ResponseData;
+	response_data->size = RES_READ_INFO_SZ + byte_count;
+	response_data->data = new byte[response_data->size];
+	response_data->data[RES_READ_BYTE_COUNT] = byte_count;
+	int current_byte = 1;
+
+	if (response_data->data != nullptr)
+	{
+		for (int i = 0; i < size; i++)
+		{
+			unsigned short current_register;
+			memcpy(&current_register, register_data + startAddress + i, sizeof(unsigned short));
+
+		}
+	}
+
+	return nullptr;
+}
+
 byte ModbusSlave::ValidateRequest(ModbusPacket request)
 {
 	//Check for Illegal address
@@ -237,13 +261,13 @@ void* ModbusSlave::GetRegisterBlock(byte registerType)
 	switch (registerType)
 	{
 		case COIL_OUTPUT:
-			return (void*)coil_outputs;
+			return (void*) coil_outputs;
 		case DISCRETE_INPUT:
-			return (void*)input_statuses;
+			return (void*) input_statuses;
 		case INPUT_REGISTER:
-			return (void*)input_registers;
+			return (void*) input_registers;
 		case HOLDING_REGISTER:
-			return (void*)holding_registers;
+			return (void*) holding_registers;
 		default:
 			return nullptr;
 	}

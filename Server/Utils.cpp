@@ -8,6 +8,12 @@
 
 using namespace std;
 
+enum BYTE_SELECTION : uint8_t
+{
+	HIGH_BYTE,
+	LOW_BYTE
+};
+
 int Utils::GetNumBytesRequiredForData(int num_requested, size_t size_of_unit)
 {
 	int byteLength = (uint8_t)ceil((double) (num_requested * size_of_unit) / SIZE_OF_BYTE);
@@ -47,6 +53,12 @@ uint8_t Utils::GetByte(bool* array)
 		 0  1 1 1 0 1 RESULTING BINARY
 		====================================================================
 	*/
+}
+
+uint8_t GetByteFromShort(uint8_t byte_selection, unsigned short value)
+{
+	
+	return 0;
 }
 
 template<typename T>
