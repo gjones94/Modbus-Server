@@ -1,15 +1,21 @@
 #include "BaseServer.h"
-#include <random>
+#include "ModbusPacket.h"
+#include "Utils.h"
 
 using namespace std;
 
 template <typename T> BaseServer<T>::BaseServer()
 {
-    port = PORT;
+    server_port = PORT;
     client_count = 0;
     server_socket = INVALID_SOCKET;
     version = MAKEWORD(0, 0);
 };
+
+template <typename T> void BaseServer<T>::SetPort(unsigned short port)
+{
+    server_port = port;
+}
 
 template <typename T> void BaseServer<T>::Start()
 {
@@ -62,7 +68,7 @@ template <typename T> bool BaseServer<T>::BindSocket()
     sockaddr_in serverIPAddress;
     serverIPAddress.sin_family = AF_INET;
     serverIPAddress.sin_addr.s_addr = INADDR_ANY; //Allows connection on EVERY network interface with IP address
-    serverIPAddress.sin_port = htons(port);
+    serverIPAddress.sin_port = htons(server_port);
 
     int result = bind(server_socket, (SOCKADDR*) &serverIPAddress, sizeof(serverIPAddress));
     if (result == SOCKET_ERROR)
@@ -91,7 +97,7 @@ template <typename T> void BaseServer<T>::Listen()
         return;
     }
 
-	cout << "Listening for incoming connections on port " << port << " ..." << endl;
+	cout << "Listening for incoming connections on port " << server_port << " ..." << endl;
 
     while (true)
     {
@@ -233,20 +239,35 @@ template <typename T> bool BaseServer<T>::ReceiveAndRespond(SOCKET socket)
 {
     char buffer[BUFFER_SIZE];
 
-    int bytesReceived = recv(socket, (char*) buffer, BUFFER_SIZE, 0);
-    if (bytesReceived <= SOCKET_ERROR)
+    int bytes_received = recv(socket, (char*) buffer, BUFFER_SIZE, 0);
+
+    if (bytes_received <= 0)
     {
         return false;
     }
 
-    int bytesSent = send(socket, (char*) buffer, BUFFER_SIZE, 0);
-    if (bytesSent <= SOCKET_ERROR)
+    SendBuffer* send_buffer = GetResponse(buffer, bytes_received);
+
+    int bytes_sent = send(socket, (char*) send_buffer->buffer, send_buffer->buffer_sz, 0);
+
+    if (bytes_sent <= 0)
     {
         return false;
     }
 
     return true;
 }
+
+
+template<typename T>
+SendBuffer* BaseServer<T>::GetResponse(const char* recv_buffer, int buffer_size_bytes)
+{
+    SendBuffer* buffer = new SendBuffer;
+    buffer->buffer = (byte*) recv_buffer;
+    buffer->buffer_sz = buffer_size_bytes;
+    return buffer;
+}
+
 
 template<typename T>
 char* BaseServer<T>::GetIPAddress(sockaddr_in ip_address)
@@ -263,3 +284,4 @@ char* BaseServer<T>::GetIPAddress(sockaddr_in ip_address)
 
 //explicitly inform compiler of the instantiations that will be used 
 template class BaseServer<char*>;
+template class BaseServer<ModbusPacket>;

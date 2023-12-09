@@ -129,9 +129,15 @@
   <ItemGroup>
     <ClCompile Include="Main.cpp" />
     <ClCompile Include="BaseServer.cpp" />
+    <ClCompile Include="ModbusPacket.cpp" />
+    <ClCompile Include="ModbusSlave.cpp" />
+    <ClCompile Include="Utils.cpp" />
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="BaseServer.h" />
+    <ClInclude Include="ModbusPacket.h" />
+    <ClInclude Include="ModbusSlave.h" />
+    <ClInclude Include="Utils.h" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <ImportGroup Label="ExtensionTargets">
